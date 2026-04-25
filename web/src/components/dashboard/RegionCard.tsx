@@ -35,7 +35,7 @@ export function RegionCard({ region, onAct }: Props) {
             <div className="font-display text-xl font-semibold text-ink-900 mt-0.5">
               {region.label}
             </div>
-            <div className="mt-1.5 text-meta text-ink-500 flex items-center gap-3">
+            <div className="mt-1.5 text-meta text-ink-500 flex items-center gap-3 whitespace-nowrap overflow-hidden">
               <span className="font-mono">
                 {region.openCases} open case{region.openCases === 1 ? "" : "s"}
               </span>
@@ -44,7 +44,7 @@ export function RegionCard({ region, onAct }: Props) {
                 {region.distinctSenders} reporters
               </span>
               <span>·</span>
-              <span>
+              <span className="truncate">
                 <span className="font-mono">{region.msgsPerMin.toFixed(1)}</span>{" "}
                 msgs/min
                 {region.baselineMsgsPerMin > 0 && (

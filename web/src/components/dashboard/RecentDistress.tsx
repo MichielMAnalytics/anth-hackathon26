@@ -35,7 +35,7 @@ export function RecentDistress({ items }: { items: RecentDistressItem[] }) {
               selectIncident(m.incidentId);
               setTab("cases");
             }}
-            className="w-full text-left rounded-md border border-surface-300 bg-white hover:bg-surface-50 px-3 py-2.5 transition"
+            className="w-full text-left rounded-md border border-surface-300 bg-white hover:bg-surface-50 active:bg-surface-100 px-3 py-2.5 min-h-[44px] transition"
           >
             <div className="flex items-center gap-2 text-meta text-ink-500">
               <span className="text-sev-critical">⚠</span>
