@@ -14,10 +14,15 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     SEED_ON_STARTUP=1
 
-RUN pip install --no-cache-dir "fastapi>=0.115" "uvicorn[standard]>=0.32" "pydantic>=2.9"
+COPY pyproject.toml uv.lock* ./
+RUN pip install --no-cache-dir uv && uv sync --no-dev --frozen || (pip install --no-cache-dir uv && uv pip install --system --no-cache .)
 
 COPY server/ ./server/
 COPY --from=web /web/dist ./web/dist
+
+COPY alembic.ini .
+COPY alembic/ ./alembic/
+COPY db/ ./db/
 
 EXPOSE 8080
 CMD ["uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8080"]
