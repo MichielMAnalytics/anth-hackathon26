@@ -9,6 +9,9 @@ struct DeliveryBadge: View {
         case .pending:
             Label("sending", systemImage: "clock")
                 .foregroundStyle(.tertiary)
+        case .queuedForMesh:
+            Label("queued (mesh)", systemImage: "antenna.radiowaves.left.and.right")
+                .foregroundStyle(.orange)
         case .sentToHub:
             Label("sent", systemImage: "checkmark")
                 .foregroundStyle(.secondary)
