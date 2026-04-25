@@ -38,6 +38,53 @@ export interface Message {
   via?: string | null;
 }
 
+export interface Consent {
+  dataStorage: boolean;
+  referralSharing: boolean;
+  publicBroadcast: boolean;
+  witnessName: string;
+  ts: string;
+}
+
+export type AuditKind =
+  | "consent_recorded"
+  | "case_closed"
+  | "broadcast_sent"
+  | "operator_message";
+
+export interface AuditEntry {
+  ts: string;
+  kind: AuditKind;
+  actor: string;
+  summary: string;
+}
+
+export type ClosureReason =
+  | "reunified"
+  | "referred_on"
+  | "aged_out"
+  | "deceased"
+  | "lost_contact";
+
+export interface ClosureRecord {
+  reason: ClosureReason;
+  notes: string;
+  witnessName: string;
+  ts: string;
+}
+
+export type ReceiptStatus = "accepted" | "declined" | "completed";
+
+export interface Receipt {
+  id: string;
+  messageId: string;
+  responder: string;
+  status: ReceiptStatus;
+  note?: string;
+  etaMinutes?: number;
+  ts: string;
+}
+
 export interface Incident {
   id: string;
   category: Category;
@@ -46,7 +93,12 @@ export interface Incident {
   region: Region;
   lat?: number | null;
   lon?: number | null;
-  details: Record<string, unknown>;
+  details: Record<string, unknown> & {
+    consent?: Consent | null;
+    audit?: AuditEntry[];
+    closure?: ClosureRecord | null;
+    status?: string;
+  };
   messageCount: number;
   lastActivity: string | null;
 }

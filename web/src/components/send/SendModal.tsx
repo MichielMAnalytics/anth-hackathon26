@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { sendBroadcast } from "../../lib/api";
 import type {
   Audience,
   BroadcastAck,
   Channel,
+  Consent,
   Incident,
   Region,
   SendMode,
@@ -82,6 +83,11 @@ function defaultBody(mode: SendMode, incident: Incident): string {
   return incident.title;
 }
 
+function redactedAlertBody(incident: Incident): string {
+  const d = incident.details as Record<string, string | undefined>;
+  return `SAFEGUARDING ALERT — child reported missing (${d.ageRange ?? "age unknown"}). Last seen: ${d.lastSeenLocation ?? "unknown"}. ${d.description ?? ""} Identifiers withheld for the child's safety. If you have information, reply to this number — a War Child operator will respond.`;
+}
+
 export function SendModal({ mode, incident, audiences, onClose, defaults }: Props) {
   const [region, setRegion] = useState<Region>(defaults?.region ?? incident.region);
   const [audienceId, setAudienceId] = useState(
@@ -91,9 +97,24 @@ export function SendModal({ mode, incident, audiences, onClose, defaults }: Prop
   );
   const [channel, setChannel] = useState<Channel>(defaults?.channel ?? "fallback");
   const [body, setBody] = useState(() => defaults?.body ?? defaultBody(mode, incident));
+  const [redact, setRedact] = useState(true);
   const [sending, setSending] = useState(false);
   const [ack, setAck] = useState<BroadcastAck | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const consent = (incident.details.consent ?? null) as Consent | null;
+  const consentBlocksAlert =
+    mode === "alert" &&
+    incident.category === "missing_person" &&
+    consent?.publicBroadcast !== true;
+
+  const selectedAudience = useMemo(
+    () => audiences.find((a) => a.id === audienceId) ?? null,
+    [audiences, audienceId],
+  );
+  const audienceIsCivilian = !!selectedAudience?.roles.includes("civilian");
+  const showRedactToggle =
+    incident.category === "missing_person" && audienceIsCivilian;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -101,9 +122,23 @@ export function SendModal({ mode, incident, audiences, onClose, defaults }: Prop
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  // Auto-rewrite the body when redact toggle / civilian audience changes
+  // for missing_person alerts. Operator can still hand-edit afterwards;
+  // toggling will overwrite their edits — that's the spec.
+  useEffect(() => {
+    if (incident.category !== "missing_person" || mode !== "alert") return;
+    if (showRedactToggle && redact) {
+      setBody(redactedAlertBody(incident));
+    } else {
+      setBody(defaultBody(mode, incident));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showRedactToggle, redact, incident.id]);
+
   async function submit() {
     setSending(true);
     setError(null);
+    const includeIdentifiers = !(showRedactToggle && redact);
     const result = (await sendBroadcast(mode, {
       incidentId: incident.id,
       audienceId,
@@ -111,7 +146,7 @@ export function SendModal({ mode, incident, audiences, onClose, defaults }: Prop
       region,
       body,
       attachments:
-        mode === "alert"
+        mode === "alert" && includeIdentifiers
           ? {
               name: (incident.details as Record<string, unknown>).name,
               photoUrl: (incident.details as Record<string, unknown>).photoUrl,
@@ -191,6 +226,25 @@ export function SendModal({ mode, incident, audiences, onClose, defaults }: Prop
               selectedId={audienceId}
               onChange={setAudienceId}
             />
+            {showRedactToggle && (
+              <label className="mt-3 flex items-start gap-2.5 px-3 py-2 border border-surface-300 rounded-md cursor-pointer hover:bg-surface-50">
+                <input
+                  type="checkbox"
+                  checked={redact}
+                  onChange={(e) => setRedact(e.target.checked)}
+                  className="mt-0.5 accent-brand-600"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-ink-900">
+                    Redact identifiers (recommended)
+                  </div>
+                  <div className="text-xs text-ink-600 mt-0.5">
+                    Strips the child's name and photo from the civilian
+                    broadcast. Description + last-seen location are kept.
+                  </div>
+                </div>
+              </label>
+            )}
           </Section>
 
           <Section
@@ -200,6 +254,11 @@ export function SendModal({ mode, incident, audiences, onClose, defaults }: Prop
             <ChannelSelector value={channel} onChange={setChannel} />
           </Section>
 
+          {consentBlocksAlert && !ack && (
+            <div className="rounded-lg border border-sev-critical/30 bg-sev-critical/5 p-3 text-sm text-sev-critical">
+              Public broadcast consent not recorded — capture it first.
+            </div>
+          )}
           {error && (
             <div className="rounded-lg border border-sev-critical/30 bg-sev-critical/5 p-3 text-sm text-sev-critical">
               <span className="font-medium">Permission denied.</span> {error}
@@ -210,7 +269,9 @@ export function SendModal({ mode, incident, audiences, onClose, defaults }: Prop
 
         <div className="px-6 py-4 border-t border-surface-300 flex items-center justify-between">
           <div className="text-meta text-ink-500">
-            Stub: real channel integration is wired in the next iteration.
+            {consentBlocksAlert
+              ? "Public broadcast consent not recorded — capture it first."
+              : "Stub: real channel integration is wired in the next iteration."}
           </div>
           <div className="flex gap-2">
             <button
@@ -221,7 +282,18 @@ export function SendModal({ mode, incident, audiences, onClose, defaults }: Prop
             </button>
             <button
               onClick={submit}
-              disabled={sending || !!ack || !body.trim() || !audienceId}
+              disabled={
+                sending ||
+                !!ack ||
+                !body.trim() ||
+                !audienceId ||
+                consentBlocksAlert
+              }
+              title={
+                consentBlocksAlert
+                  ? "Public broadcast consent not recorded — capture it first."
+                  : undefined
+              }
               className="px-4 py-2 text-sm font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {ack ? "✓ Sent" : sending ? "Sending…" : (

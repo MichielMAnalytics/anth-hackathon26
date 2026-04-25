@@ -1,5 +1,7 @@
 import clsx from "clsx";
 import type { Message } from "../lib/types";
+import { useStore } from "../lib/store";
+import { Receipts } from "./case/Receipts";
 
 function maskPhone(p: string): string {
   if (p.length <= 4) return p;
@@ -15,6 +17,9 @@ function fmtTime(iso: string): string {
 export function MessageBubble({ msg }: { msg: Message }) {
   const ex = msg.extracted ?? undefined;
   const outbound = !!msg.outbound;
+  const receipts = useStore(
+    (s) => s.receiptsByMessage[msg.messageId] ?? [],
+  );
   return (
     <div
       className={clsx(
@@ -79,6 +84,7 @@ export function MessageBubble({ msg }: { msg: Message }) {
             {ex.personRef && <Tag>↪ {ex.personRef}</Tag>}
           </div>
         )}
+        {outbound && receipts.length > 0 && <Receipts receipts={receipts} />}
       </div>
     </div>
   );

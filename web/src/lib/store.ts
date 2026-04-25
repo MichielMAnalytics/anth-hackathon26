@@ -5,6 +5,7 @@ import type {
   Incident,
   Message,
   Operator,
+  Receipt,
   Region,
   RegionStats,
   Severity,
@@ -24,6 +25,7 @@ export type IssueFilter = Category | "all";
 interface State {
   incidents: Record<string, Incident>;
   messagesByIncident: Record<string, Message[]>;
+  receiptsByMessage: Record<string, Receipt[]>;
   audiences: Audience[];
   regions: Record<Region, RegionStats>;
   selectedIncidentId: string | null;
@@ -37,6 +39,7 @@ interface State {
   upsertIncident: (inc: Incident) => void;
   appendMessage: (msg: Message) => void;
   setMessages: (incidentId: string, msgs: Message[]) => void;
+  appendReceipt: (r: Receipt) => void;
   setAudiences: (a: Audience[]) => void;
   setRegions: (r: RegionStats[]) => void;
   selectIncident: (id: string | null) => void;
@@ -50,6 +53,7 @@ interface State {
 export const useStore = create<State>((set) => ({
   incidents: {},
   messagesByIncident: {},
+  receiptsByMessage: {},
   audiences: [],
   regions: {} as Record<Region, RegionStats>,
   selectedIncidentId: null,
@@ -78,6 +82,17 @@ export const useStore = create<State>((set) => ({
     set((s) => ({
       messagesByIncident: { ...s.messagesByIncident, [incidentId]: msgs },
     })),
+  appendReceipt: (r) =>
+    set((s) => {
+      const prev = s.receiptsByMessage[r.messageId] ?? [];
+      if (prev.some((x) => x.id === r.id)) return s;
+      return {
+        receiptsByMessage: {
+          ...s.receiptsByMessage,
+          [r.messageId]: [...prev, r],
+        },
+      };
+    }),
   setAudiences: (a) => set({ audiences: a }),
   setRegions: (r) =>
     set({

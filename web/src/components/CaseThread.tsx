@@ -1,9 +1,69 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useStore } from "../lib/store";
-import { fetchMessages } from "../lib/api";
+import { fetchMessages, postReceipt } from "../lib/api";
 import { MessageBubble } from "./MessageBubble";
 import { CaseComposer } from "./CaseComposer";
 import { SeverityChip } from "./SeverityChip";
+import type { Receipt, ReceiptStatus } from "../lib/types";
+
+const MOCK_RESPONDERS = [
+  "Dr Karim",
+  "Field worker Aisha",
+  "Pharmacist Yousef",
+  "Nurse Layla",
+  "Coordinator Omar",
+  "Dr Fadi",
+];
+
+const MOCK_NOTES = [
+  "On my way",
+  "Stuck in traffic",
+  "Need 30m",
+  "Will check now",
+  "Already in area",
+];
+
+function pick<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function scheduleFakeReceipts(
+  incidentId: string,
+  messageId: string,
+  appendReceipt: (r: Receipt) => void,
+) {
+  const total = 2 + Math.floor(Math.random() * 3); // 2..4
+  const used = new Set<string>();
+  for (let i = 0; i < total; i++) {
+    const delayMs = 8000 + Math.random() * 17000; // 8s..25s
+    setTimeout(() => {
+      let responder = pick(MOCK_RESPONDERS);
+      let attempts = 0;
+      while (used.has(responder) && attempts < 6) {
+        responder = pick(MOCK_RESPONDERS);
+        attempts += 1;
+      }
+      used.add(responder);
+      const roll = Math.random();
+      const status: ReceiptStatus =
+        roll < 0.65 ? "accepted" : roll < 0.85 ? "completed" : "declined";
+      const r: Receipt = {
+        id: `rcpt_${messageId}_${i}_${Math.random().toString(36).slice(2, 8)}`,
+        messageId,
+        responder,
+        status,
+        ts: new Date().toISOString(),
+        ...(status === "accepted"
+          ? { etaMinutes: 5 + Math.floor(Math.random() * 25) }
+          : {}),
+        ...(status === "declined" ? { note: pick(MOCK_NOTES) } : {}),
+      };
+      appendReceipt(r);
+      // fire-and-forget contract call
+      postReceipt(incidentId, r).catch(() => {});
+    }, delayMs);
+  }
+}
 
 const REGION_LABEL: Record<string, string> = {
   IRQ_BAGHDAD: "Baghdad, Iraq",
@@ -25,7 +85,9 @@ export function CaseThread() {
     [selectedId, messagesMap],
   );
   const setMessages = useStore((s) => s.setMessages);
+  const appendReceipt = useStore((s) => s.appendReceipt);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const receiptsScheduledRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!selectedId) return;
@@ -33,6 +95,24 @@ export function CaseThread() {
       fetchMessages(selectedId).then((m) => setMessages(selectedId, m));
     }
   }, [selectedId, setMessages]);
+
+  // Schedule fake receipts for any new outbound messages (only those that
+  // arrived after mount — we don't backfill receipts for old messages).
+  const mountedAtRef = useRef<number>(Date.now());
+  useEffect(() => {
+    for (const m of messages) {
+      if (!m.outbound) continue;
+      if (receiptsScheduledRef.current.has(m.messageId)) continue;
+      const tsMs = new Date(m.ts).getTime();
+      if (tsMs < mountedAtRef.current - 5000) {
+        // historical message — skip
+        receiptsScheduledRef.current.add(m.messageId);
+        continue;
+      }
+      receiptsScheduledRef.current.add(m.messageId);
+      scheduleFakeReceipts(m.incidentId, m.messageId, appendReceipt);
+    }
+  }, [messages, appendReceipt]);
 
   useEffect(() => {
     const el = scrollRef.current;

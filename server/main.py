@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel
+from typing import Literal
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -66,6 +68,51 @@ class WSHub:
 
 
 hub = WSHub()
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _append_audit(incident, kind: str, actor: str, summary: str) -> None:
+    """Append an audit entry to incident.details['audit']. Mutates in place."""
+    audit = incident.details.get("audit")
+    if not isinstance(audit, list):
+        audit = []
+    audit.append(
+        {
+            "ts": _now_iso(),
+            "kind": kind,
+            "actor": actor,
+            "summary": summary,
+        }
+    )
+    incident.details["audit"] = audit
+
+
+class ConsentPayload(BaseModel):
+    dataStorage: bool
+    referralSharing: bool
+    publicBroadcast: bool
+    witnessName: str
+
+
+class ClosurePayload(BaseModel):
+    reason: Literal[
+        "reunified", "referred_on", "aged_out", "deceased", "lost_contact"
+    ]
+    notes: str = ""
+    witnessName: str
+
+
+class ReceiptPayload(BaseModel):
+    id: str
+    messageId: str
+    responder: str
+    status: Literal["accepted", "declined", "completed"]
+    note: str | None = None
+    etaMinutes: int | None = None
+    ts: str
 
 
 @app.get("/api/incidents")
@@ -230,24 +277,69 @@ def _check_broadcast_permissions(
 
 
 @app.post("/api/alerts")
-def send_alert(
+async def send_alert(
     payload: BroadcastPayload, x_operator_id: str | None = Header(default=None)
 ):
     op = _operator(x_operator_id)
     ok, reason = _check_broadcast_permissions(op, payload)
     if not ok:
         return JSONResponse({"ok": False, "error": "permission", "reason": reason}, status_code=403)
+    # Server-side consent gate: missing_person alerts require publicBroadcast.
+    if payload.incidentId:
+        inc = store.get_incident(payload.incidentId)
+        if inc and inc.category == "missing_person":
+            consent = inc.details.get("consent")
+            if not (isinstance(consent, dict) and consent.get("publicBroadcast")):
+                return JSONResponse(
+                    {
+                        "ok": False,
+                        "error": "consent",
+                        "reason": "Public broadcast consent not recorded — capture it first.",
+                    },
+                    status_code=409,
+                )
+            aud = audiences_module.get(payload.audienceId)
+            aud_label = aud.label if aud else payload.audienceId
+            _append_audit(
+                inc,
+                "broadcast_sent",
+                op.name,
+                f"Amber alert sent to {aud_label} via {payload.channels}.",
+            )
+            await hub.broadcast(StreamEvent(type="incident_upserted", incident=inc))
+        elif inc:
+            aud = audiences_module.get(payload.audienceId)
+            aud_label = aud.label if aud else payload.audienceId
+            _append_audit(
+                inc,
+                "broadcast_sent",
+                op.name,
+                f"Alert sent to {aud_label} via {payload.channels}.",
+            )
+            await hub.broadcast(StreamEvent(type="incident_upserted", incident=inc))
     return json.loads(_build_ack(payload, "alert").model_dump_json(by_alias=True))
 
 
 @app.post("/api/requests")
-def send_request(
+async def send_request(
     payload: BroadcastPayload, x_operator_id: str | None = Header(default=None)
 ):
     op = _operator(x_operator_id)
     ok, reason = _check_broadcast_permissions(op, payload)
     if not ok:
         return JSONResponse({"ok": False, "error": "permission", "reason": reason}, status_code=403)
+    if payload.incidentId:
+        inc = store.get_incident(payload.incidentId)
+        if inc:
+            aud = audiences_module.get(payload.audienceId)
+            aud_label = aud.label if aud else payload.audienceId
+            _append_audit(
+                inc,
+                "broadcast_sent",
+                op.name,
+                f"Request sent to {aud_label} via {payload.channels}.",
+            )
+            await hub.broadcast(StreamEvent(type="incident_upserted", incident=inc))
     return json.loads(_build_ack(payload, "request").model_dump_json(by_alias=True))
 
 
@@ -281,6 +373,23 @@ async def send_operator_message(
     )
     store.append_outbound(msg)
     refreshed = store.get_incident(incident_id) or incident
+    aud_label = ""
+    if payload.audienceId:
+        aud = audiences_module.get(payload.audienceId)
+        aud_label = aud.label if aud else payload.audienceId
+    snippet = payload.body.strip().replace("\n", " ")
+    if len(snippet) > 80:
+        snippet = snippet[:77] + "…"
+    _append_audit(
+        refreshed,
+        "operator_message",
+        op.name,
+        (
+            f"Replied via {payload.via}"
+            + (f" → {aud_label}" if aud_label else "")
+            + f": {snippet}"
+        ),
+    )
     await hub.broadcast(StreamEvent(type="message", incident=refreshed, message=msg))
 
     ack: BroadcastAck | None = None
@@ -300,6 +409,103 @@ async def send_operator_message(
         "messageId": msg.messageId,
         "broadcast": json.loads(ack.model_dump_json(by_alias=True)) if ack else None,
     }
+
+
+@app.patch("/api/cases/{incident_id}/consent")
+async def patch_case_consent(
+    incident_id: str,
+    payload: ConsentPayload,
+    x_operator_id: str | None = Header(default=None),
+):
+    incident = store.get_incident(incident_id)
+    if not incident:
+        return JSONResponse({"error": "case not found"}, status_code=404)
+    op = _operator(x_operator_id)
+    if not operators_module.can_act_in_region(op, incident.region):
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": "permission",
+                "reason": f"{op.name} ({op.role}) is not assigned to {incident.region}.",
+            },
+            status_code=403,
+        )
+    consent = {
+        "dataStorage": payload.dataStorage,
+        "referralSharing": payload.referralSharing,
+        "publicBroadcast": payload.publicBroadcast,
+        "witnessName": payload.witnessName,
+        "ts": _now_iso(),
+    }
+    incident.details["consent"] = consent
+    flags = []
+    if payload.dataStorage:
+        flags.append("storage")
+    if payload.referralSharing:
+        flags.append("referral")
+    if payload.publicBroadcast:
+        flags.append("broadcast")
+    flag_str = ", ".join(flags) if flags else "none"
+    _append_audit(
+        incident,
+        "consent_recorded",
+        op.name,
+        f"Consent recorded by {payload.witnessName} (allows: {flag_str}).",
+    )
+    await hub.broadcast(StreamEvent(type="incident_upserted", incident=incident))
+    return json.loads(incident.model_dump_json(by_alias=True))
+
+
+@app.post("/api/cases/{incident_id}/close")
+async def close_case(
+    incident_id: str,
+    payload: ClosurePayload,
+    x_operator_id: str | None = Header(default=None),
+):
+    incident = store.get_incident(incident_id)
+    if not incident:
+        return JSONResponse({"error": "case not found"}, status_code=404)
+    op = _operator(x_operator_id)
+    if not operators_module.can_act_in_region(op, incident.region):
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": "permission",
+                "reason": f"{op.name} ({op.role}) is not assigned to {incident.region}.",
+            },
+            status_code=403,
+        )
+    closure = {
+        "reason": payload.reason,
+        "notes": payload.notes,
+        "witnessName": payload.witnessName,
+        "ts": _now_iso(),
+    }
+    # idempotent: overwrite previous closure metadata if any
+    incident.details["closure"] = closure
+    incident.details["status"] = "closed"
+    summary = f"Case closed — {payload.reason} (witnessed by {payload.witnessName})."
+    if payload.notes:
+        snippet = payload.notes.strip().replace("\n", " ")
+        if len(snippet) > 80:
+            snippet = snippet[:77] + "…"
+        summary += f" Notes: {snippet}"
+    _append_audit(incident, "case_closed", op.name, summary)
+    await hub.broadcast(StreamEvent(type="incident_upserted", incident=incident))
+    return json.loads(incident.model_dump_json(by_alias=True))
+
+
+@app.post("/api/cases/{incident_id}/receipts")
+async def post_receipt(incident_id: str, payload: ReceiptPayload):
+    # frontend stub: log and return ok. Real wiring lands in a later phase.
+    incident = store.get_incident(incident_id)
+    if not incident:
+        return JSONResponse({"error": "case not found"}, status_code=404)
+    print(
+        f"[receipt] case={incident_id} msg={payload.messageId} "
+        f"responder={payload.responder} status={payload.status}"
+    )
+    return {"ok": True}
 
 
 @app.post("/api/sim/seed")

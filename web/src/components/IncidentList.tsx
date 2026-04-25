@@ -72,6 +72,7 @@ export function IncidentList({ region, issue }: Props) {
         )}
         {sorted.map((inc) => {
           const active = inc.id === selectedId;
+          const closed = inc.details?.status === "closed";
           return (
             <button
               key={inc.id}
@@ -90,11 +91,23 @@ export function IncidentList({ region, issue }: Props) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <SeverityChip severity={inc.severity} />
+                    {closed && (
+                      <span className="text-meta uppercase tracking-wider px-1.5 py-0.5 rounded border border-surface-300 bg-surface-100 text-ink-500">
+                        closed
+                      </span>
+                    )}
                     <div className="text-meta font-mono text-ink-500 ml-auto">
                       {timeAgo(inc.lastActivity)}
                     </div>
                   </div>
-                  <div className="mt-1.5 text-sm font-semibold text-ink-900 leading-snug">
+                  <div
+                    className={clsx(
+                      "mt-1.5 text-sm font-semibold leading-snug",
+                      closed
+                        ? "text-ink-500 line-through"
+                        : "text-ink-900",
+                    )}
+                  >
                     {inc.title}
                   </div>
                   <div className="mt-0.5 text-meta text-ink-500">

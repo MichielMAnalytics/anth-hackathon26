@@ -3,10 +3,13 @@ import type {
   Audience,
   BroadcastAck,
   Channel,
+  ClosureReason,
+  Consent,
   Dashboard,
   Incident,
   Message,
   Operator,
+  Receipt,
   Region,
   RegionStats,
   RegionTimeline,
@@ -109,6 +112,48 @@ export async function sendCaseMessage(
     body: JSON.stringify({ body, via, audienceId }),
   });
   return r.json();
+}
+
+export async function patchCaseConsent(
+  incidentId: string,
+  consent: Omit<Consent, "ts">,
+): Promise<Incident> {
+  const r = await fetch(`/api/cases/${incidentId}/consent`, {
+    method: "PATCH",
+    headers: ah({ "content-type": "application/json" }),
+    body: JSON.stringify(consent),
+  });
+  if (!r.ok) throw new Error("consent");
+  return r.json();
+}
+
+export async function closeCase(
+  incidentId: string,
+  payload: { reason: ClosureReason; notes: string; witnessName: string },
+): Promise<Incident> {
+  const r = await fetch(`/api/cases/${incidentId}/close`, {
+    method: "POST",
+    headers: ah({ "content-type": "application/json" }),
+    body: JSON.stringify(payload),
+  });
+  if (!r.ok) throw new Error("close");
+  return r.json();
+}
+
+export async function postReceipt(
+  incidentId: string,
+  receipt: Receipt,
+): Promise<{ ok: boolean }> {
+  try {
+    const r = await fetch(`/api/cases/${incidentId}/receipts`, {
+      method: "POST",
+      headers: ah({ "content-type": "application/json" }),
+      body: JSON.stringify(receipt),
+    });
+    return r.json();
+  } catch {
+    return { ok: false };
+  }
 }
 
 export function openStream(onEvent: (e: StreamEvent) => void) {

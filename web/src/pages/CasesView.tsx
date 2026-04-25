@@ -6,7 +6,9 @@ import { CaseThread } from "../components/CaseThread";
 import { DetailPanel } from "../components/detail/DetailPanel";
 import { CaseMiniMap } from "../components/CaseMiniMap";
 import { SendModal } from "../components/send/SendModal";
-import type { SendMode } from "../lib/types";
+import { ClosureModal } from "../components/case/ClosureModal";
+import { AuditTrail } from "../components/case/AuditTrail";
+import type { AuditEntry, Consent, SendMode } from "../lib/types";
 
 type MobilePane = "list" | "thread" | "profile";
 
@@ -19,6 +21,7 @@ export function CasesView() {
   const audiences = useStore((s) => s.audiences);
   const selectIncident = useStore((s) => s.selectIncident);
   const [sendMode, setSendMode] = useState<SendMode | null>(null);
+  const [closureOpen, setClosureOpen] = useState(false);
   // Mobile-only nav state. On md+ all panes are visible regardless.
   const [mobilePane, setMobilePane] = useState<MobilePane>("list");
   // md+ profile rail collapse state. Default open on every mount; persists for
@@ -105,6 +108,7 @@ export function CasesView() {
             incident={incident}
             onAlert={() => setSendMode("alert")}
             onRequest={() => setSendMode("request")}
+            onClose={() => setClosureOpen(true)}
             onCollapse={() => setProfileOpen(false)}
           />
         </aside>
@@ -143,6 +147,7 @@ export function CasesView() {
               incident={incident}
               onAlert={() => setSendMode("alert")}
               onRequest={() => setSendMode("request")}
+              onClose={() => setClosureOpen(true)}
             />
           </div>
         </div>
@@ -156,6 +161,12 @@ export function CasesView() {
           onClose={() => setSendMode(null)}
         />
       )}
+      {closureOpen && incident && (
+        <ClosureModal
+          incident={incident}
+          onClose={() => setClosureOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -164,11 +175,13 @@ function CaseProfile({
   incident,
   onAlert,
   onRequest,
+  onClose,
   onCollapse,
 }: {
   incident: ReturnType<typeof useStore.getState>["incidents"][string] | null;
   onAlert: () => void;
   onRequest: () => void;
+  onClose: () => void;
   onCollapse?: () => void;
 }) {
   if (!incident) {
@@ -225,30 +238,62 @@ function CaseProfile({
       <div className="flex-1 overflow-y-auto p-5 space-y-5">
         <CaseMiniMap incident={incident} />
         <DetailPanel incident={incident} />
+        <AuditTrail
+          entries={(incident.details.audit ?? []) as AuditEntry[]}
+        />
       </div>
-      {(incident.category === "missing_person" ||
-        incident.category === "medical" ||
-        incident.category === "resource_shortage") && (
-        <div className="p-4 border-t border-surface-300 space-y-2">
-          {incident.category === "missing_person" && (
-            <button
-              onClick={onAlert}
-              className="w-full px-3 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-md"
-            >
-              Send Amber Alert broadcast
-            </button>
-          )}
-          {(incident.category === "medical" ||
-            incident.category === "resource_shortage") && (
-            <button
-              onClick={onRequest}
-              className="w-full px-3 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-md"
-            >
-              Request help broadcast
-            </button>
-          )}
-        </div>
-      )}
+      {(() => {
+        const closed = incident.details.status === "closed";
+        const consent = (incident.details.consent ?? null) as Consent | null;
+        const canBroadcast =
+          incident.category !== "missing_person" || !!consent?.publicBroadcast;
+        if (
+          incident.category !== "missing_person" &&
+          incident.category !== "medical" &&
+          incident.category !== "resource_shortage"
+        ) {
+          return null;
+        }
+        return (
+          <div className="p-4 border-t border-surface-300 space-y-2">
+            {incident.category === "missing_person" && (
+              <button
+                onClick={onAlert}
+                disabled={closed || !canBroadcast}
+                title={
+                  !canBroadcast
+                    ? "Public broadcast consent not recorded — capture it first."
+                    : closed
+                      ? "Case is closed."
+                      : undefined
+                }
+                className="w-full px-3 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Send Amber Alert broadcast
+              </button>
+            )}
+            {(incident.category === "medical" ||
+              incident.category === "resource_shortage") && (
+              <button
+                onClick={onRequest}
+                disabled={closed}
+                className="w-full px-3 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Request help broadcast
+              </button>
+            )}
+            {incident.category === "missing_person" && (
+              <button
+                onClick={onClose}
+                disabled={closed}
+                className="w-full px-3 py-2.5 bg-white hover:bg-surface-100 text-ink-700 border border-surface-300 text-sm font-medium rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {closed ? "Case closed" : "Close case"}
+              </button>
+            )}
+          </div>
+        );
+      })()}
     </>
   );
 }
