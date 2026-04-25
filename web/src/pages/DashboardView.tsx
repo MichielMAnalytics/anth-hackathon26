@@ -57,6 +57,7 @@ function buildBody(theme: DashboardTheme, region: DashboardRegion): string {
 export function DashboardView() {
   const audiences = useStore((s) => s.audiences);
   const incidents = useStore((s) => s.incidents);
+  const me = useStore((s) => s.me);
 
   const [data, setData] = useState<Dashboard | null>(null);
   const [send, setSend] = useState<PreparedSend | null>(null);
@@ -75,9 +76,18 @@ export function DashboardView() {
     };
   }, []);
 
+  const visibleRegions = useMemo(() => {
+    if (!data) return [];
+    if (me && me.role === "junior" && me.regions.length > 0) {
+      const allowed = new Set(me.regions);
+      return data.regions.filter((r) => allowed.has(r.region));
+    }
+    return data.regions;
+  }, [data, me]);
+
   const summary = useMemo(() => {
-    if (!data) return null;
-    const totals = data.regions.reduce(
+    if (visibleRegions.length === 0) return null;
+    return visibleRegions.reduce(
       (acc, r) => {
         acc.cases += r.openCases;
         acc.distress += r.distressCount;
@@ -87,8 +97,7 @@ export function DashboardView() {
       },
       { cases: 0, distress: 0, msgs: 0, anomalies: 0 },
     );
-    return totals;
-  }, [data]);
+  }, [visibleRegions]);
 
   function handleAct(theme: DashboardTheme, region: DashboardRegion) {
     // pick an incident to anchor the send to (used for incident-id linkage in
@@ -144,7 +153,14 @@ export function DashboardView() {
             </div>
           )}
 
-          {data?.regions.map((r) => (
+          {data && visibleRegions.length === 0 && (
+            <div className="rounded-lg border border-dashed border-surface-300 bg-white p-8 text-center text-sm text-ink-500">
+              No regions in your scope right now. Switch to a different
+              operator from the header to widen the view.
+            </div>
+          )}
+
+          {visibleRegions.map((r) => (
             <RegionCard key={r.region} region={r} onAct={handleAct} />
           ))}
         </div>

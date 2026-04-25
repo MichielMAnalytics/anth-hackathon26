@@ -92,6 +92,16 @@ export interface BroadcastAck {
 
 export type SendMode = "alert" | "request";
 
+export type OperatorRole = "senior" | "junior";
+
+export interface Operator {
+  id: string;
+  name: string;
+  role: OperatorRole;
+  regions: Region[];
+  avatarSeed: string;
+}
+
 export interface TimelineBucket {
   ts: string;
   count: number;

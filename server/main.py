@@ -9,8 +9,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from fastapi import Header
+
 from . import audiences as audiences_module
 from . import dashboard as dashboard_module
+from . import operators as operators_module
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -96,6 +99,20 @@ async def ingest(event: IngestEvent):
     incident, message = store.upsert(event)
     await hub.broadcast(StreamEvent(type="message", incident=incident, message=message))
     return {"ok": True, "incidentId": incident.id, "messageId": message.messageId}
+
+
+def _operator(header_id: str | None) -> operators_module.Operator:
+    return operators_module.get(header_id)
+
+
+@app.get("/api/operators")
+def list_operators():
+    return [json.loads(o.model_dump_json(by_alias=True)) for o in operators_module.OPERATORS]
+
+
+@app.get("/api/me")
+def whoami(x_operator_id: str | None = Header(default=None)):
+    return json.loads(_operator(x_operator_id).model_dump_json(by_alias=True))
 
 
 @app.get("/api/audiences")
@@ -197,25 +214,66 @@ def _build_ack(payload: BroadcastPayload, kind: str) -> BroadcastAck:
     )
 
 
+def _check_broadcast_permissions(
+    op: operators_module.Operator, payload: BroadcastPayload
+) -> tuple[bool, str]:
+    if not operators_module.can_act_in_region(op, payload.region):
+        return False, f"{op.name} ({op.role}) cannot broadcast in {payload.region}."
+    aud = audiences_module.get(payload.audienceId)
+    if aud and "civilian" in aud.roles and not operators_module.can_broadcast_to_civilians(op):
+        return (
+            False,
+            f"Junior operators cannot broadcast to civilian audiences. "
+            f"Escalate to a senior operator or pick an NGO/medical audience.",
+        )
+    return True, ""
+
+
 @app.post("/api/alerts")
-def send_alert(payload: BroadcastPayload):
+def send_alert(
+    payload: BroadcastPayload, x_operator_id: str | None = Header(default=None)
+):
+    op = _operator(x_operator_id)
+    ok, reason = _check_broadcast_permissions(op, payload)
+    if not ok:
+        return JSONResponse({"ok": False, "error": "permission", "reason": reason}, status_code=403)
     return json.loads(_build_ack(payload, "alert").model_dump_json(by_alias=True))
 
 
 @app.post("/api/requests")
-def send_request(payload: BroadcastPayload):
+def send_request(
+    payload: BroadcastPayload, x_operator_id: str | None = Header(default=None)
+):
+    op = _operator(x_operator_id)
+    ok, reason = _check_broadcast_permissions(op, payload)
+    if not ok:
+        return JSONResponse({"ok": False, "error": "permission", "reason": reason}, status_code=403)
     return json.loads(_build_ack(payload, "request").model_dump_json(by_alias=True))
 
 
 @app.post("/api/cases/{incident_id}/messages")
-async def send_operator_message(incident_id: str, payload: OperatorMessage):
+async def send_operator_message(
+    incident_id: str,
+    payload: OperatorMessage,
+    x_operator_id: str | None = Header(default=None),
+):
     incident = store.get_incident(incident_id)
     if not incident:
         return JSONResponse({"error": "case not found"}, status_code=404)
+    op = _operator(x_operator_id)
+    if not operators_module.can_act_in_region(op, incident.region):
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": "permission",
+                "reason": f"{op.name} ({op.role}) is not assigned to {incident.region}.",
+            },
+            status_code=403,
+        )
     msg = Message(
         messageId=str(uuid4()),
         incidentId=incident_id,
-        **{"from": "operator@warchild"},
+        **{"from": f"operator:{op.id}"},
         body=payload.body,
         ts=datetime.now(timezone.utc),
         outbound=True,

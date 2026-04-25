@@ -3,10 +3,13 @@ import clsx from "clsx";
 import {
   fetchAudiences,
   fetchIncidents,
+  fetchMe,
+  fetchOperators,
   fetchRegionStats,
   openStream,
   seedDemo,
 } from "./lib/api";
+import { OperatorSwitcher } from "./components/OperatorSwitcher";
 import { useStore, type Tab } from "./lib/store";
 import { DashboardView } from "./pages/DashboardView";
 import { CasesView } from "./pages/CasesView";
@@ -26,6 +29,8 @@ export function App() {
   const appendMessage = useStore((s) => s.appendMessage);
   const setAudiences = useStore((s) => s.setAudiences);
   const setRegions = useStore((s) => s.setRegions);
+  const setMe = useStore((s) => s.setMe);
+  const setOperators = useStore((s) => s.setOperators);
   const select = useStore((s) => s.selectIncident);
   const activeTab = useStore((s) => s.activeTab);
   const setTab = useStore((s) => s.setTab);
@@ -33,16 +38,22 @@ export function App() {
   const [seeding, setSeeding] = useState(false);
 
   useEffect(() => {
-    Promise.all([fetchIncidents(), fetchAudiences(), fetchRegionStats()]).then(
-      ([incidents, audiences, regions]) => {
-        setIncidents(incidents);
-        setAudiences(audiences);
-        setRegions(regions);
-        if (incidents.length > 0 && !useStore.getState().selectedIncidentId) {
-          select(incidents[0].id);
-        }
-      },
-    );
+    Promise.all([
+      fetchIncidents(),
+      fetchAudiences(),
+      fetchRegionStats(),
+      fetchMe(),
+      fetchOperators(),
+    ]).then(([incidents, audiences, regions, me, operators]) => {
+      setIncidents(incidents);
+      setAudiences(audiences);
+      setRegions(regions);
+      setMe(me);
+      setOperators(operators);
+      if (incidents.length > 0 && !useStore.getState().selectedIncidentId) {
+        select(incidents[0].id);
+      }
+    });
 
     const closeStream = openStream((ev) => {
       upsertIncident(ev.incident);
@@ -57,7 +68,16 @@ export function App() {
       closeStream();
       clearInterval(tick);
     };
-  }, [setIncidents, upsertIncident, appendMessage, setAudiences, setRegions, select]);
+  }, [
+    setIncidents,
+    upsertIncident,
+    appendMessage,
+    setAudiences,
+    setRegions,
+    setMe,
+    setOperators,
+    select,
+  ]);
 
   async function handleSeed() {
     setSeeding(true);
@@ -122,10 +142,7 @@ export function App() {
           >
             {seeding ? "Seeding…" : "Seed demo"}
           </button>
-          <div className="flex items-center gap-2 text-meta font-mono text-ink-600 px-2.5 py-1 rounded-full border border-surface-300 bg-white">
-            <span className="w-1.5 h-1.5 rounded-full bg-sev-low" />
-            operator@warchild
-          </div>
+          <OperatorSwitcher />
         </div>
       </header>
 

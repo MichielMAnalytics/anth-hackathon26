@@ -93,6 +93,7 @@ export function SendModal({ mode, incident, audiences, onClose, defaults }: Prop
   const [body, setBody] = useState(() => defaults?.body ?? defaultBody(mode, incident));
   const [sending, setSending] = useState(false);
   const [ack, setAck] = useState<BroadcastAck | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -102,7 +103,8 @@ export function SendModal({ mode, incident, audiences, onClose, defaults }: Prop
 
   async function submit() {
     setSending(true);
-    const result = await sendBroadcast(mode, {
+    setError(null);
+    const result = (await sendBroadcast(mode, {
       incidentId: incident.id,
       audienceId,
       channels: channel,
@@ -115,8 +117,12 @@ export function SendModal({ mode, incident, audiences, onClose, defaults }: Prop
               photoUrl: (incident.details as Record<string, unknown>).photoUrl,
             }
           : {},
-    });
+    })) as BroadcastAck & { error?: string; reason?: string };
     setSending(false);
+    if (!result.ok && result.error === "permission") {
+      setError(result.reason ?? "Permission denied.");
+      return;
+    }
     setAck(result);
     setTimeout(onClose, 4500);
   }
@@ -193,6 +199,11 @@ export function SendModal({ mode, incident, audiences, onClose, defaults }: Prop
             <ChannelSelector value={channel} onChange={setChannel} />
           </Section>
 
+          {error && (
+            <div className="rounded-lg border border-sev-critical/30 bg-sev-critical/5 p-3 text-sm text-sev-critical">
+              <span className="font-medium">Permission denied.</span> {error}
+            </div>
+          )}
           {ack && <VerificationPanel ack={ack} />}
         </div>
 

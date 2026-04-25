@@ -31,8 +31,14 @@ export function IncidentList({ region, issue }: Props) {
   const selectedId = useStore((s) => s.selectedIncidentId);
   const select = useStore((s) => s.selectIncident);
 
+  const me = useStore((s) => s.me);
   const sorted = useMemo(() => {
+    const allowed =
+      me && me.role === "junior" && me.regions.length > 0
+        ? new Set(me.regions)
+        : null;
     const list = Object.values(incidents).filter((i) => {
+      if (allowed && !allowed.has(i.region)) return false;
       if (region !== "all" && i.region !== region) return false;
       if (issue !== "all" && i.category !== issue) return false;
       return true;
@@ -45,7 +51,7 @@ export function IncidentList({ region, issue }: Props) {
       return tb - ta;
     });
     return list;
-  }, [incidents, region, issue]);
+  }, [incidents, region, issue, me]);
 
   return (
     <div className="h-full flex flex-col">

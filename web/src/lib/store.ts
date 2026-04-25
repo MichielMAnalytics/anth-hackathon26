@@ -4,6 +4,7 @@ import type {
   Category,
   Incident,
   Message,
+  Operator,
   Region,
   RegionStats,
   Severity,
@@ -29,6 +30,8 @@ interface State {
   selectedRegion: Region | "all";
   issueFilter: IssueFilter;
   activeTab: Tab;
+  me: Operator | null;
+  operators: Operator[];
 
   setIncidents: (list: Incident[]) => void;
   upsertIncident: (inc: Incident) => void;
@@ -40,6 +43,8 @@ interface State {
   selectRegion: (r: Region | "all") => void;
   setIssueFilter: (i: IssueFilter) => void;
   setTab: (t: Tab) => void;
+  setMe: (op: Operator | null) => void;
+  setOperators: (ops: Operator[]) => void;
 }
 
 export const useStore = create<State>((set) => ({
@@ -51,6 +56,8 @@ export const useStore = create<State>((set) => ({
   selectedRegion: "all",
   issueFilter: "all",
   activeTab: "dashboard",
+  me: null,
+  operators: [],
 
   setIncidents: (list) =>
     set({ incidents: Object.fromEntries(list.map((i) => [i.id, i])) }),
@@ -83,4 +90,6 @@ export const useStore = create<State>((set) => ({
   selectRegion: (r) => set({ selectedRegion: r }),
   setIssueFilter: (i) => set({ issueFilter: i }),
   setTab: (t) => set({ activeTab: t }),
+  setMe: (op) => set({ me: op }),
+  setOperators: (ops) => set({ operators: ops }),
 }));

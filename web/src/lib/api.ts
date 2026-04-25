@@ -1,3 +1,4 @@
+import { authHeaders } from "./auth";
 import type {
   Audience,
   BroadcastAck,
@@ -5,6 +6,7 @@ import type {
   Dashboard,
   Incident,
   Message,
+  Operator,
   Region,
   RegionStats,
   RegionTimeline,
@@ -12,33 +14,49 @@ import type {
   StreamEvent,
 } from "./types";
 
+function ah(extra: Record<string, string> = {}): Record<string, string> {
+  return { ...authHeaders(), ...extra };
+}
+
 export async function fetchIncidents(): Promise<Incident[]> {
-  const r = await fetch("/api/incidents");
+  const r = await fetch("/api/incidents", { headers: ah() });
   if (!r.ok) throw new Error("incidents");
   return r.json();
 }
 
 export async function fetchMessages(incidentId: string): Promise<Message[]> {
-  const r = await fetch(`/api/incidents/${incidentId}/messages`);
+  const r = await fetch(`/api/incidents/${incidentId}/messages`, { headers: ah() });
   if (!r.ok) throw new Error("messages");
   return r.json();
 }
 
 export async function fetchAudiences(): Promise<Audience[]> {
-  const r = await fetch("/api/audiences");
+  const r = await fetch("/api/audiences", { headers: ah() });
   if (!r.ok) throw new Error("audiences");
   return r.json();
 }
 
 export async function fetchRegionStats(): Promise<RegionStats[]> {
-  const r = await fetch("/api/regions/stats");
+  const r = await fetch("/api/regions/stats", { headers: ah() });
   if (!r.ok) throw new Error("regions");
   return r.json();
 }
 
 export async function fetchDashboard(): Promise<Dashboard> {
-  const r = await fetch("/api/dashboard");
+  const r = await fetch("/api/dashboard", { headers: ah() });
   if (!r.ok) throw new Error("dashboard");
+  return r.json();
+}
+
+export async function fetchMe(): Promise<Operator> {
+  const r = await fetch("/api/me", { headers: ah() });
+  if (!r.ok) throw new Error("me");
+  return r.json();
+}
+
+export async function fetchOperators(): Promise<Operator[]> {
+  const r = await fetch("/api/operators");
+  if (!r.ok) throw new Error("operators");
   return r.json();
 }
 
@@ -49,6 +67,7 @@ export async function fetchRegionTimeline(
 ): Promise<RegionTimeline> {
   const r = await fetch(
     `/api/regions/${region}/timeline?minutes=${minutes}&bucket=${bucketSeconds}`,
+    { headers: ah() },
   );
   if (!r.ok) throw new Error("timeline");
   return r.json();
@@ -72,7 +91,7 @@ export async function sendBroadcast(
   const path = mode === "alert" ? "/api/alerts" : "/api/requests";
   const r = await fetch(path, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: ah({ "content-type": "application/json" }),
     body: JSON.stringify({ attachments: {}, ...payload }),
   });
   return r.json();
@@ -86,7 +105,7 @@ export async function sendCaseMessage(
 ): Promise<{ ok: boolean; broadcast?: BroadcastAck | null }> {
   const r = await fetch(`/api/cases/${incidentId}/messages`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: ah({ "content-type": "application/json" }),
     body: JSON.stringify({ body, via, audienceId }),
   });
   return r.json();

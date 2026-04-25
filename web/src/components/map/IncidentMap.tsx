@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet.heat";
+import { fetchMessages } from "../../lib/api";
 import { useStore } from "../../lib/store";
-import type { Incident, Region, Severity } from "../../lib/types";
+import type { Incident, Message, Region, Severity } from "../../lib/types";
 
 const REGION_ZOOM = 10;
+const MESSAGE_DOT_MIN_ZOOM = 9; // show individual messages when zoomed in
 const WORLD_VIEW: L.LatLngExpression = [30, 40];
 const WORLD_ZOOM = 4;
 
@@ -24,12 +26,17 @@ export function IncidentMap() {
   const mapRef = useRef<L.Map | null>(null);
   const heatLayerRef = useRef<L.Layer | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
+  const messagesLayerRef = useRef<L.LayerGroup | null>(null);
 
   const incidents = useStore((s) => s.incidents);
   const regions = useStore((s) => s.regions);
   const selectedRegion = useStore((s) => s.selectedRegion);
   const selectRegion = useStore((s) => s.selectRegion);
   const didInitialFit = useRef(false);
+  const [zoom, setZoom] = useState(WORLD_ZOOM);
+  const [messagesByIncident, setMessagesByIncident] = useState<
+    Record<string, Message[]>
+  >({});
 
   // initialize once
   useEffect(() => {
@@ -54,12 +61,36 @@ export function IncidentMap() {
 
     mapRef.current = map;
     markersLayerRef.current = L.layerGroup().addTo(map);
+    messagesLayerRef.current = L.layerGroup().addTo(map);
+
+    setZoom(map.getZoom());
+    map.on("zoomend", () => setZoom(map.getZoom()));
 
     return () => {
       map.remove();
       mapRef.current = null;
     };
   }, []);
+
+  // when zoomed in, fetch & cache messages for visible incidents (those in
+  // selected region or all if no region picked)
+  useEffect(() => {
+    if (zoom < MESSAGE_DOT_MIN_ZOOM) return;
+    const wanted = Object.values(incidents).filter((i) => {
+      if (selectedRegion === "all") return true;
+      return i.region === selectedRegion;
+    });
+    wanted.forEach((inc) => {
+      if (messagesByIncident[inc.id]) return;
+      fetchMessages(inc.id)
+        .then((msgs) =>
+          setMessagesByIncident((prev) =>
+            prev[inc.id] ? prev : { ...prev, [inc.id]: msgs },
+          ),
+        )
+        .catch(() => {});
+    });
+  }, [zoom, incidents, selectedRegion, messagesByIncident]);
 
   // points for heatmap (one per incident, weighted by message count)
   const heatPoints = useMemo<[number, number, number][]>(() => {
@@ -120,6 +151,46 @@ export function IncidentMap() {
       group.addLayer(c);
     });
 
+    // individual message dots — only at zoom >= MESSAGE_DOT_MIN_ZOOM
+    const mGroup = messagesLayerRef.current!;
+    mGroup.clearLayers();
+    if (zoom >= MESSAGE_DOT_MIN_ZOOM) {
+      const visibleIncidents = Object.values(incidents).filter((i) => {
+        if (selectedRegion === "all") return true;
+        return i.region === selectedRegion;
+      });
+      visibleIncidents.forEach((inc) => {
+        const msgs = messagesByIncident[inc.id];
+        if (!msgs) return;
+        const color = SEV_COLOR[inc.severity];
+        msgs.forEach((m) => {
+          if (typeof m.lat !== "number" || typeof m.lon !== "number") return;
+          if (m.outbound) return; // only inbound civilian dots on map
+          const distress = !!m.extracted?.distress;
+          const dot = L.circleMarker([m.lat, m.lon], {
+            radius: distress ? 3.5 : 2.5,
+            color,
+            weight: distress ? 1 : 0.5,
+            opacity: distress ? 0.9 : 0.45,
+            fillColor: color,
+            fillOpacity: distress ? 0.55 : 0.32,
+            interactive: true,
+          }).bindTooltip(
+            `<div style="font-size: 11px; color: #475569; max-width: 260px;">` +
+              `<div style="font-family: 'JetBrains Mono', monospace; color: #94a3b8;">` +
+              `···${m.from.slice(-4)} · ${new Date(m.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` +
+              `</div>` +
+              `<div style="margin-top: 2px; color: #0f172a; line-height: 1.35;">` +
+              m.body.replace(/[<>]/g, "").slice(0, 140) +
+              (m.body.length > 140 ? "…" : "") +
+              `</div></div>`,
+            { direction: "top", offset: [0, -2], className: "ngo-tip" },
+          );
+          mGroup.addLayer(dot);
+        });
+      });
+    }
+
     // also region centroid markers (small, neutral)
     Object.values(regions).forEach((rs) => {
       const c = L.circleMarker([rs.lat, rs.lon], {
@@ -136,7 +207,15 @@ export function IncidentMap() {
         });
       group.addLayer(c);
     });
-  }, [heatPoints, incidents, regions, selectRegion]);
+  }, [
+    heatPoints,
+    incidents,
+    regions,
+    selectRegion,
+    selectedRegion,
+    zoom,
+    messagesByIncident,
+  ]);
 
   // react to selectedRegion changes (FilterBar, panel selection, etc.)
   useEffect(() => {
