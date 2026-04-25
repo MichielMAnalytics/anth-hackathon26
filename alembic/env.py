@@ -12,6 +12,7 @@ from server.db.base import Base
 # Import all model modules so their tables are attached to Base.metadata.
 # (Modules added in subsequent tasks; safe to import as they're created.)
 from server.db import identity  # noqa: F401  (registers tables on Base.metadata)
+from server.db import alerts  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", get_settings().database_url)
