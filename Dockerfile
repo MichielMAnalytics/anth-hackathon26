@@ -11,8 +11,7 @@ FROM python:3.12-slim
 WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    SEED_ON_STARTUP=1
+    PIP_NO_CACHE_DIR=1
 
 COPY pyproject.toml uv.lock* ./
 RUN pip install --no-cache-dir uv && uv sync --no-dev --frozen || (pip install --no-cache-dir uv && uv pip install --system --no-cache .)
