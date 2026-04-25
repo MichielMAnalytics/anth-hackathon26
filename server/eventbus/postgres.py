@@ -19,9 +19,8 @@ class PostgresEventBus:
     def _dsn(self) -> str:
         # Convert SQLAlchemy URL to plain DSN for asyncpg.
         url = self._engine.url
-        return (
-            f"postgresql://{url.username}:{url.password}@{url.host}:{url.port}/{url.database}"
-        )
+        port = url.port or 5432
+        return f"postgresql://{url.username}:{url.password}@{url.host}:{port}/{url.database}"
 
     async def publish(self, channel: str, payload: str) -> None:
         conn = await asyncpg.connect(self._dsn())
