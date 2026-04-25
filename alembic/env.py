@@ -18,6 +18,7 @@ from server.db import messages  # noqa: F401
 from server.db import decisions  # noqa: F401
 from server.db import outbound  # noqa: F401
 from server.db import knowledge  # noqa: F401
+from server.db import trust  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", get_settings().database_url)
