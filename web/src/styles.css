@@ -36,3 +36,11 @@ body {
   background: #f1f5f9 !important;
   font-family: inherit !important;
 }
+/* Touch-friendly zoom controls (Leaflet defaults to 26px) */
+.leaflet-bar a,
+.leaflet-bar a:hover {
+  width: 36px !important;
+  height: 36px !important;
+  line-height: 36px !important;
+  font-size: 18px !important;
+}
