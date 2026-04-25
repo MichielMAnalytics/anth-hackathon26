@@ -178,7 +178,7 @@ export function App() {
                 onClick={() => t.enabled && setTab(t.id)}
                 className={clsx(
                   "relative px-3.5 py-1.5 text-sm font-medium rounded-md transition whitespace-nowrap",
-                  !t.enabled && "text-ink-400 cursor-not-allowed",
+                  !t.enabled && "text-ink-400 cursor-not-allowed hidden lg:inline-flex",
                   t.enabled && activeTab === t.id
                     ? "text-ink-900"
                     : t.enabled && "text-ink-600 hover:text-ink-900",
