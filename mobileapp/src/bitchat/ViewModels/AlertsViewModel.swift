@@ -49,14 +49,26 @@ final class AlertsViewModel: ObservableObject {
     private let hubClient: HubClient
     private var payloadObserver: NSObjectProtocol?
 
+    // MARK: - DTN (delay-tolerant networking)
+
+    private let dtnStore: DTNStore
+    private let dtnRelay: DTNRelay
+    /// Number of bundles currently held on disk (foreground users may want
+    /// to surface this in a debug view; not user-facing in v1).
+    @Published private(set) var dtnHeldBundleCount: Int = 0
+
     // MARK: - Init
 
     init(hubClient: HubClient = HubClient(),
          defaults: UserDefaults = .standard) {
         self.hubClient = hubClient
         self.defaults = defaults
+        let store = DTNStore()
+        self.dtnStore = store
+        self.dtnRelay = DTNRelay(store: store)
         loadPersistedRegistration()
         subscribeToMeshPayloads()
+        self.dtnHeldBundleCount = store.count
         // Auto-enter demo mode if launched with --demo (used by the simulator
         // launcher so the populated UI shows up without tapping through the
         // onboarding form).
@@ -88,6 +100,21 @@ final class AlertsViewModel: ObservableObject {
                 self.handleNoisePayload(type: type, payload: payload, fromPeerID: peerID)
             }
         }
+    }
+
+    // MARK: - DTN bundle handling
+
+    /// Wrap an inner amber payload as a DTN bundle and store it locally so the
+    /// gossip layer can carry it toward the hub when a path opens. Used as a
+    /// fallback after the internet path fails.
+    private func enqueueDTNFallback(innerType: NoisePayloadType, innerPayload: Data) {
+        guard let reg = registration else { return }
+        _ = dtnRelay.originate(
+            innerType: innerType,
+            innerPayload: innerPayload,
+            hubX25519Pubkey: reg.hubPubkey
+        )
+        dtnHeldBundleCount = dtnStore.count
     }
 
     // MARK: - Onboarding
@@ -163,8 +190,16 @@ final class AlertsViewModel: ObservableObject {
             updateMessageDelivery(id: msg.id, to: .sentToHub)
             submissionState = .sent
         } catch {
-            updateMessageDelivery(id: msg.id, to: .failed(error.localizedDescription))
-            submissionState = .failed("Could not send message: \(error.localizedDescription)")
+            // Internet failed — wrap as a DTN bundle so it gossips toward the hub.
+            let inner = GeneralMessagePayload(clientMsgId: msg.id, body: trimmed, sentAt: UInt32(Date().timeIntervalSince1970))
+            if let bytes = inner.encode() {
+                enqueueDTNFallback(innerType: .generalMessage, innerPayload: bytes)
+                updateMessageDelivery(id: msg.id, to: .queuedForMesh)
+                submissionState = .failed("Offline — message queued for mesh relay (\(dtnHeldBundleCount) pending).")
+            } else {
+                updateMessageDelivery(id: msg.id, to: .failed(error.localizedDescription))
+                submissionState = .failed("Could not send message: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -202,8 +237,23 @@ final class AlertsViewModel: ObservableObject {
             updateLocationDelivery(id: report.id, to: .sentToHub)
             submissionState = .sent
         } catch {
-            updateLocationDelivery(id: report.id, to: .failed(error.localizedDescription))
-            submissionState = .failed("Could not send location report: \(error.localizedDescription)")
+            // Internet failed — wrap as a DTN bundle so the mesh can carry it.
+            let inner = LocationReportPayload(
+                clientMsgId: report.id,
+                lat: lat,
+                lng: lng,
+                safety: safety,
+                note: note,
+                observedAt: UInt32(report.observedAt.timeIntervalSince1970)
+            )
+            if let bytes = inner.encode() {
+                enqueueDTNFallback(innerType: .locationReport, innerPayload: bytes)
+                updateLocationDelivery(id: report.id, to: .queuedForMesh)
+                submissionState = .failed("Offline — location report queued for mesh relay.")
+            } else {
+                updateLocationDelivery(id: report.id, to: .failed(error.localizedDescription))
+                submissionState = .failed("Could not send location report: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -324,6 +374,13 @@ final class AlertsViewModel: ObservableObject {
     /// Called from the bridge that observes `BitchatDelegate.didReceiveNoisePayload`.
     /// Filters non-alert types and unsigned/non-hub payloads.
     func handleNoisePayload(type: NoisePayloadType, payload: Data, fromPeerID: String) {
+        // DTN payloads are gossip — pass straight to the relay.
+        if type == .dtnBundle || type == .dtnReceipt || type == .dtnSummary {
+            let peer = PeerID(str: fromPeerID)
+            dtnRelay.handleInbound(type: type, payload: payload, from: peer)
+            dtnHeldBundleCount = dtnStore.count
+            return
+        }
         guard type == .alert else { return }
         guard let parsed = AlertPayload.decode(from: payload) else { return }
         // NOTE: signature verification against `registration?.hubPubkey` is intentionally
@@ -406,15 +463,30 @@ final class AlertsViewModel: ObservableObject {
             return
         }
         do {
-            // Try internet path first; the mesh fallback is wired in by the
-            // bridge that owns the BLE handle (kept out of this VM to avoid
-            // a cross-import).
             try await hubClient.submitSighting(sighting, userId: reg.userId)
             updateSightingDelivery(id: summary.id, to: .sentToHub)
             submissionState = .sent
         } catch {
-            updateSightingDelivery(id: summary.id, to: .failed("offline"))
-            submissionState = .failed("Could not reach hub. Sighting will be queued for relay over the mesh.")
+            // Internet failed — wrap text fields as a DTN bundle for mesh relay.
+            // Photo/voice attachments don't fit our 512KB DTN budget; they're
+            // dropped from the bundle but kept on `pendingSighting` so they
+            // upload as soon as internet returns.
+            let inner = SightingPayload(
+                caseId: caseId,
+                clientMsgId: sighting.clientMsgId,
+                freeText: freeText,
+                observedAt: UInt32(sighting.observedAt.timeIntervalSince1970),
+                locationLat: location?.0,
+                locationLng: location?.1
+            )
+            if let bytes = inner.encode() {
+                enqueueDTNFallback(innerType: .sighting, innerPayload: bytes)
+                updateSightingDelivery(id: summary.id, to: .queuedForMesh)
+                submissionState = .failed("Offline — sighting queued for mesh relay.")
+            } else {
+                updateSightingDelivery(id: summary.id, to: .failed("offline"))
+                submissionState = .failed("Could not reach hub. Sighting will be queued for relay over the mesh.")
+            }
             pendingSighting = PendingSighting(draft: sighting, hubPubkey: reg.hubPubkey)
         }
     }
@@ -520,6 +592,7 @@ struct SightingDraft {
 
 enum AmberDeliveryStatus: Equatable {
     case pending           // not yet delivered to anything
+    case queuedForMesh     // wrapped as a DTN bundle, gossipping toward hub
     case sentToHub         // HTTP/Nostr returned 200
     case deliveredToHub    // hub-level ACK received (mesh ack or stream ACK)
     case failed(String)
