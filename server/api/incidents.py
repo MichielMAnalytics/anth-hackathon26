@@ -2,14 +2,16 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.api.auth_dep import current_operator
 from server.api.registry import REGIONS
 from server.db.alerts import Alert
-from server.db.messages import InboundMessage
+from server.db.decisions import AgentDecision, ToolCall
+from server.db.messages import Bucket, InboundMessage, TriagedMessage
+from server.db.outbound import OutboundMessage
 from server.db.session import get_db
 
 router = APIRouter(prefix="/api")
@@ -91,3 +93,78 @@ async def list_incidents(
             "lastActivity": last_activity.get(alert.alert_id),
         })
     return result
+
+
+@router.get("/incidents/{incident_id}/messages")
+async def incident_messages(
+    incident_id: str,
+    _op: Annotated[dict[str, Any], Depends(current_operator)],
+    db: AsyncSession = Depends(get_db),
+) -> list[dict[str, Any]]:
+    alert = (
+        await db.execute(select(Alert).where(Alert.alert_id == incident_id))
+    ).scalar_one_or_none()
+    if alert is None:
+        raise HTTPException(status_code=404, detail="incident not found")
+
+    inbound_rows = (
+        await db.execute(
+            select(InboundMessage)
+            .where(InboundMessage.in_reply_to_alert_id == incident_id)
+            .order_by(InboundMessage.received_at)
+        )
+    ).scalars().all()
+
+    triage_geohash: dict[str, str] = {}
+    if inbound_rows:
+        msg_ids = [m.msg_id for m in inbound_rows]
+        triage_rows = (
+            await db.execute(select(TriagedMessage).where(TriagedMessage.msg_id.in_(msg_ids)))
+        ).scalars().all()
+        triage_geohash = {t.msg_id: t.geohash6 for t in triage_rows if t.geohash6}
+
+    messages: list[dict[str, Any]] = []
+    for msg in inbound_rows:
+        via = msg.channel if msg.channel in ("app", "sms", "fallback") else None
+        messages.append({
+            "messageId": msg.msg_id,
+            "incidentId": incident_id,
+            "from": msg.sender_phone,
+            "body": msg.body,
+            "ts": msg.received_at.isoformat(),
+            "geohash": triage_geohash.get(msg.msg_id),
+            "lat": None,
+            "lon": None,
+            "extracted": None,
+            "outbound": False,
+            "via": via,
+        })
+
+    outbound_rows = (
+        await db.execute(
+            select(OutboundMessage)
+            .join(ToolCall, OutboundMessage.tool_call_id == ToolCall.call_id)
+            .join(AgentDecision, ToolCall.decision_id == AgentDecision.decision_id)
+            .join(Bucket, AgentDecision.bucket_key == Bucket.bucket_key)
+            .where(Bucket.alert_id == incident_id)
+        )
+    ).scalars().all()
+
+    for out in outbound_rows:
+        via = out.channel if out.channel in ("app", "sms", "fallback") else None
+        messages.append({
+            "messageId": out.out_id,
+            "incidentId": incident_id,
+            "from": "ngo",
+            "body": out.body,
+            "ts": out.created_at.isoformat(),
+            "geohash": None,
+            "lat": None,
+            "lon": None,
+            "extracted": None,
+            "outbound": True,
+            "via": via,
+        })
+
+    messages.sort(key=lambda m: m["ts"])
+    return messages

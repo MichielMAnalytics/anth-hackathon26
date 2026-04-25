@@ -15,11 +15,13 @@ _TEST_PHONES = ["+9647001112233", "+9647009998877"]
 async def _isolate_alerts(test_session_maker):
     """Ensure no alerts/accounts/NGOs leak between tests."""
     async with test_session_maker() as s:
+        # 1. inbound messages referencing our test alerts
         await s.execute(
             delete(InboundMessage).where(
                 InboundMessage.sender_phone.in_(_TEST_PHONES)
             )
         )
+        # 2. alerts belonging to test NGOs
         ngo_ids = (
             await s.execute(
                 select(NGO.ngo_id).where(NGO.name.in_(_TEST_NGO_NAMES))
@@ -29,9 +31,11 @@ async def _isolate_alerts(test_session_maker):
             await s.execute(
                 delete(Alert).where(Alert.ngo_id.in_(ngo_ids))
             )
+            # 3. accounts referencing test NGOs
             await s.execute(
                 delete(Account).where(Account.ngo_id.in_(ngo_ids))
             )
+            # 4. finally the NGOs themselves
             await s.execute(
                 delete(NGO).where(NGO.ngo_id.in_(ngo_ids))
             )
@@ -96,4 +100,58 @@ async def test_incidents_returns_mapped_alert(client, db):
 
 async def test_incidents_requires_auth(client):
     resp = await client.get("/api/incidents")
+    assert resp.status_code == 401
+
+
+async def test_incident_messages_returns_inbound(client, db):
+    ngo = NGO(name="Warchild-msg-test")
+    db.add(ngo)
+    await db.flush()
+    alert = Alert(ngo_id=ngo.ngo_id, person_name="Khalid", status="active", region_geohash_prefix="sv8d")
+    db.add(alert)
+    await db.flush()
+    acc = Account(phone="+9647009998877", ngo_id=ngo.ngo_id)
+    db.add(acc)
+    await db.flush()
+    db.add(InboundMessage(
+        ngo_id=ngo.ngo_id, channel="sms", sender_phone="+9647009998877",
+        in_reply_to_alert_id=alert.alert_id, body="Spotted near checkpoint",
+        media_urls=[], raw={},
+    ))
+    db.add(InboundMessage(
+        ngo_id=ngo.ngo_id, channel="app", sender_phone="+9647009998877",
+        in_reply_to_alert_id=alert.alert_id, body="Heading north now",
+        media_urls=[], raw={},
+    ))
+    await db.commit()
+
+    resp = await client.get(
+        f"/api/incidents/{alert.alert_id}/messages",
+        headers={"X-Operator-Id": "op-senior"},
+    )
+    assert resp.status_code == 200
+    items = resp.json()
+    assert len(items) == 2
+    assert all(m["outbound"] is False for m in items)
+    assert items[0]["ts"] <= items[1]["ts"]
+    assert items[0]["via"] in ("sms", "app", "fallback", None)
+
+
+async def test_incident_messages_404_for_unknown(client):
+    resp = await client.get(
+        "/api/incidents/00000000000000000000000000/messages",
+        headers={"X-Operator-Id": "op-senior"},
+    )
+    assert resp.status_code == 404
+
+
+async def test_incident_messages_requires_auth(client, db):
+    ngo = NGO(name="Warchild-msg-auth")
+    db.add(ngo)
+    await db.flush()
+    alert = Alert(ngo_id=ngo.ngo_id, person_name="X", status="active")
+    db.add(alert)
+    await db.commit()
+
+    resp = await client.get(f"/api/incidents/{alert.alert_id}/messages")
     assert resp.status_code == 401
