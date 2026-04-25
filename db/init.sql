@@ -1,0 +1,4 @@
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE DATABASE matching_test;
+\c matching_test
+CREATE EXTENSION IF NOT EXISTS vector;

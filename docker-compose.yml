@@ -1,10 +1,32 @@
 services:
-  ngo-hub:
-    build: .
-    image: ngo-hub:latest
-    container_name: ngo-hub
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: matching-db
     environment:
-      SEED_ON_STARTUP: "1"
+      POSTGRES_DB: matching
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "app", "-d", "matching"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    image: matching-engine:latest
+    container_name: matching-app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://app:app@db:5432/matching
+      JWT_SECRET: change-me
+    ports: ["8080:8080"]
+
+volumes:
+  pgdata:
