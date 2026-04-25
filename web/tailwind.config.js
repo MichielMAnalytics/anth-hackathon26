@@ -4,59 +4,73 @@ export default {
   theme: {
     extend: {
       colors: {
-        // warm parchment surface
-        paper: {
-          50: "#fbfaf6",
-          100: "#f5f2ea",
-          200: "#ece7d9",
-          300: "#ddd5c1",
-          400: "#b8ad94",
-          500: "#8e836b",
-          600: "#6e6552",
-          700: "#534b3d",
-          800: "#3a3429",
-          900: "#221f18",
+        // surface / neutral system: white surfaces, deep navy text
+        surface: {
+          DEFAULT: "#ffffff",
+          50: "#ffffff",
+          100: "#f8fafc",
+          200: "#eef2f6",
+          300: "#e2e8f0",
+          400: "#cbd5e1",
+          500: "#94a3b8",
+          600: "#64748b",
+          700: "#475569",
+          800: "#334155",
+          900: "#1e293b",
         },
-        // deep civic teal — used sparingly for primary actions / selection
-        accent: {
-          50: "#eef4f4",
-          100: "#dae8e8",
-          200: "#b6d2d2",
-          300: "#8cb4b4",
-          400: "#5e8e8e",
-          500: "#3a6f6f",
-          600: "#2a5757",
-          700: "#1f4242",
-          800: "#163131",
-          900: "#0e2020",
+        ink: {
+          DEFAULT: "#0f172a",
+          50: "#f8fafc",
+          100: "#f1f5f9",
+          400: "#94a3b8",
+          500: "#64748b",
+          600: "#475569",
+          700: "#334155",
+          800: "#1e293b",
+          900: "#0f172a",
+          950: "#0a0f1d",
         },
-        // severity — informational, not alarming
+        // War Child red — primary brand
+        brand: {
+          50: "#fff1f1",
+          100: "#ffdfdf",
+          200: "#ffc4c4",
+          300: "#ff9b9b",
+          400: "#fa6464",
+          500: "#ee3535",
+          600: "#e62e2e", // primary
+          700: "#c11f1f",
+          800: "#9d1d1d",
+          900: "#811d1d",
+        },
+        // severity — calmer than v1 dark theme; reads as informational
         sev: {
-          critical: "#9b4a3a", // terracotta
+          critical: "#c11f1f", // brand-700, but only on chips not full surfaces
           high: "#b07636",     // burnt amber
-          medium: "#b4943f",   // ochre
-          low: "#6a8957",      // sage
+          medium: "#a17e2e",   // ochre
+          low: "#3f7d4f",      // forest green
         },
       },
       fontFamily: {
-        display: ['"Fraunces"', "ui-serif", "Georgia", "serif"],
+        // Inter for UI body, Inter Tight (or Inter heavier weights) for display
+        display: ['"Inter"', "system-ui", "sans-serif"],
         sans: ['"Inter"', "system-ui", "sans-serif"],
         mono: ['"JetBrains Mono"', "ui-monospace", "monospace"],
       },
       fontSize: {
-        meta: ["11px", { lineHeight: "16px", letterSpacing: "0.02em" }],
+        meta: ["11px", { lineHeight: "16px", letterSpacing: "0.04em" }],
       },
       borderRadius: {
         sm: "4px",
         DEFAULT: "6px",
         md: "8px",
-        lg: "10px",
-        xl: "14px",
+        lg: "12px",
+        xl: "16px",
       },
       boxShadow: {
-        soft: "0 1px 2px rgba(34, 31, 24, 0.04)",
-        card: "0 2px 8px rgba(34, 31, 24, 0.06)",
-        modal: "0 12px 32px rgba(34, 31, 24, 0.12)",
+        soft: "0 1px 2px rgba(15, 23, 42, 0.04)",
+        card: "0 2px 8px rgba(15, 23, 42, 0.06)",
+        modal: "0 16px 40px rgba(15, 23, 42, 0.16)",
       },
     },
   },

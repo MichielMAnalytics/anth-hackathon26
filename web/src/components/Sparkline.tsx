@@ -9,7 +9,7 @@ export function Sparkline({ data, width = 160, height = 36 }: Props) {
     return (
       <div
         style={{ width, height }}
-        className="border-b border-dashed border-paper-300"
+        className="border-b border-dashed border-surface-300"
       />
     );
   }

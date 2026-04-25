@@ -33,6 +33,8 @@ class Message(BaseModel):
     lat: float | None = None
     lon: float | None = None
     extracted: Extracted | None = None
+    outbound: bool = False
+    via: str | None = None  # bitchat | sms | app
 
     model_config = {"populate_by_name": True}
 
@@ -129,3 +131,9 @@ class BroadcastAck(BaseModel):
     channels: list[str]
     audienceLabel: str
     note: str
+
+
+class OperatorMessage(BaseModel):
+    body: str
+    via: Channel = "fallback"
+    audienceId: str | None = None  # if set, also schedules a broadcast

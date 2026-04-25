@@ -34,6 +34,8 @@ export interface Message {
   lat?: number | null;
   lon?: number | null;
   extracted?: Extracted | null;
+  outbound?: boolean;
+  via?: string | null;
 }
 
 export interface Incident {

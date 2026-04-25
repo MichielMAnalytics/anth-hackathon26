@@ -10,10 +10,15 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import audiences as audiences_module
+from datetime import datetime, timezone
+from uuid import uuid4
+
 from .schemas import (
     BroadcastAck,
     BroadcastPayload,
     IngestEvent,
+    Message,
+    OperatorMessage,
     RegionStats,
     StreamEvent,
 )
@@ -177,6 +182,43 @@ def send_alert(payload: BroadcastPayload):
 @app.post("/api/requests")
 def send_request(payload: BroadcastPayload):
     return json.loads(_build_ack(payload, "request").model_dump_json(by_alias=True))
+
+
+@app.post("/api/cases/{incident_id}/messages")
+async def send_operator_message(incident_id: str, payload: OperatorMessage):
+    incident = store.get_incident(incident_id)
+    if not incident:
+        return JSONResponse({"error": "case not found"}, status_code=404)
+    msg = Message(
+        messageId=str(uuid4()),
+        incidentId=incident_id,
+        **{"from": "operator@warchild"},
+        body=payload.body,
+        ts=datetime.now(timezone.utc),
+        outbound=True,
+        via=payload.via,
+    )
+    store.append_outbound(msg)
+    refreshed = store.get_incident(incident_id) or incident
+    await hub.broadcast(StreamEvent(type="message", incident=refreshed, message=msg))
+
+    ack: BroadcastAck | None = None
+    if payload.audienceId:
+        ack = _build_ack(
+            BroadcastPayload(
+                audienceId=payload.audienceId,
+                channels=payload.via,
+                region=incident.region,
+                body=payload.body,
+                incidentId=incident_id,
+            ),
+            "case-message",
+        )
+    return {
+        "ok": True,
+        "messageId": msg.messageId,
+        "broadcast": json.loads(ack.model_dump_json(by_alias=True)) if ack else None,
+    }
 
 
 @app.post("/api/sim/seed")

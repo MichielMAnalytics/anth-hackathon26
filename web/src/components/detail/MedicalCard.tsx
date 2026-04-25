@@ -14,14 +14,14 @@ export function MedicalCard({ incident }: { incident: Incident }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
-        <div className="w-16 h-16 rounded-lg bg-paper-200 flex items-center justify-center text-3xl">
+        <div className="w-16 h-16 rounded-lg bg-surface-200 flex items-center justify-center text-3xl">
           ⚕
         </div>
         <div>
-          <div className="text-meta uppercase tracking-wider text-paper-500">
+          <div className="text-meta uppercase tracking-wider text-ink-500">
             Medical request
           </div>
-          <div className="font-display text-lg text-paper-900">
+          <div className="font-display text-lg font-semibold text-ink-900">
             {d.patientName ?? "Patient unknown"}
           </div>
         </div>

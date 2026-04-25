@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type {
   Audience,
+  Category,
   Incident,
   Message,
   Region,
@@ -16,7 +17,8 @@ const SEV_RANK: Record<Severity, number> = {
 };
 export { SEV_RANK };
 
-export type Tab = "map" | "incidents" | "stream";
+export type Tab = "cases" | "map" | "stream";
+export type IssueFilter = Category | "all";
 
 interface State {
   incidents: Record<string, Incident>;
@@ -24,7 +26,8 @@ interface State {
   audiences: Audience[];
   regions: Record<Region, RegionStats>;
   selectedIncidentId: string | null;
-  selectedRegion: Region | null;
+  selectedRegion: Region | "all";
+  issueFilter: IssueFilter;
   activeTab: Tab;
 
   setIncidents: (list: Incident[]) => void;
@@ -34,7 +37,8 @@ interface State {
   setAudiences: (a: Audience[]) => void;
   setRegions: (r: RegionStats[]) => void;
   selectIncident: (id: string | null) => void;
-  selectRegion: (r: Region | null) => void;
+  selectRegion: (r: Region | "all") => void;
+  setIssueFilter: (i: IssueFilter) => void;
   setTab: (t: Tab) => void;
 }
 
@@ -44,8 +48,9 @@ export const useStore = create<State>((set) => ({
   audiences: [],
   regions: {} as Record<Region, RegionStats>,
   selectedIncidentId: null,
-  selectedRegion: null,
-  activeTab: "map",
+  selectedRegion: "all",
+  issueFilter: "all",
+  activeTab: "cases",
 
   setIncidents: (list) =>
     set({ incidents: Object.fromEntries(list.map((i) => [i.id, i])) }),
@@ -76,5 +81,6 @@ export const useStore = create<State>((set) => ({
     }),
   selectIncident: (id) => set({ selectedIncidentId: id }),
   selectRegion: (r) => set({ selectedRegion: r }),
+  setIssueFilter: (i) => set({ issueFilter: i }),
   setTab: (t) => set({ activeTab: t }),
 }));

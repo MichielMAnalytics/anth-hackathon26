@@ -8,10 +8,10 @@ export function VerificationPanel({ ack }: { ack: BroadcastAck }) {
       <div className="flex items-start gap-3">
         <div className="text-sev-low text-lg leading-none mt-0.5">✓</div>
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium text-paper-900">
+          <div className="text-sm font-medium text-ink-900">
             Queued for delivery
           </div>
-          <div className="text-xs text-paper-700 mt-0.5">
+          <div className="text-xs text-ink-700 mt-0.5">
             Sending to <span className="font-medium">{ack.audienceLabel}</span>{" "}
             via {ack.channels.join(" + ")}.
           </div>
@@ -36,10 +36,10 @@ export function VerificationPanel({ ack }: { ack: BroadcastAck }) {
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="border-l border-sev-low/30 pl-2">
-      <div className="text-meta uppercase tracking-wider text-paper-500">
+      <div className="text-meta uppercase tracking-wider text-ink-500">
         {label}
       </div>
-      <div className="font-mono text-sm text-paper-900">{value}</div>
+      <div className="font-mono text-sm text-ink-900">{value}</div>
     </div>
   );
 }

@@ -121,26 +121,26 @@ export function SendModal({ mode, incident, audiences, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-paper-900/30 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 bg-ink-900/40 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-2xl bg-paper-50 border border-paper-200 rounded-xl shadow-modal mt-12"
+        className="w-full max-w-2xl bg-white border border-surface-300 rounded-xl shadow-modal mt-12"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-6 py-5 border-b border-paper-200 flex items-start justify-between">
+        <div className="px-6 py-5 border-b border-surface-300 flex items-start justify-between">
           <div>
-            <div className="text-meta uppercase tracking-wider text-paper-500">
+            <div className="text-meta uppercase tracking-wider text-ink-500">
               {mode === "alert" ? "Amber Alert" : "Resource Request"}
             </div>
-            <h2 className="font-display text-2xl text-paper-900 mt-0.5">
+            <h2 className="font-display text-2xl font-semibold text-ink-900 mt-0.5">
               {heading}
             </h2>
-            <div className="text-sm text-paper-600 mt-1">{subhead}</div>
+            <div className="text-sm text-ink-600 mt-1">{subhead}</div>
           </div>
           <button
             onClick={onClose}
-            className="text-paper-500 hover:text-paper-900 text-2xl leading-none"
+            className="text-ink-500 hover:text-ink-900 text-2xl leading-none"
           >
             ×
           </button>
@@ -151,7 +151,7 @@ export function SendModal({ mode, incident, audiences, onClose }: Props) {
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              className="w-full bg-paper-50 border border-paper-200 rounded-md px-3 py-2 text-sm text-paper-900 leading-relaxed focus:outline-none focus:border-accent-500 focus:ring-1 focus:ring-accent-500/20 min-h-[110px]"
+              className="w-full bg-white border border-surface-300 rounded-md px-3 py-2 text-sm text-ink-900 leading-relaxed focus:outline-none focus:border-brand-600 focus:ring-1 focus:ring-brand-600/20 min-h-[110px]"
             />
           </Section>
 
@@ -159,7 +159,7 @@ export function SendModal({ mode, incident, audiences, onClose }: Props) {
             <select
               value={region}
               onChange={(e) => setRegion(e.target.value as Region)}
-              className="bg-paper-50 border border-paper-200 rounded-md px-3 py-2 text-sm text-paper-900 focus:outline-none focus:border-accent-500"
+              className="bg-white border border-surface-300 rounded-md px-3 py-2 text-sm text-ink-900 focus:outline-none focus:border-brand-600"
             >
               {Object.entries(REGION_LABEL).map(([id, label]) => (
                 <option key={id} value={id}>
@@ -188,21 +188,21 @@ export function SendModal({ mode, incident, audiences, onClose }: Props) {
           {ack && <VerificationPanel ack={ack} />}
         </div>
 
-        <div className="px-6 py-4 border-t border-paper-200 flex items-center justify-between">
-          <div className="text-meta text-paper-500">
+        <div className="px-6 py-4 border-t border-surface-300 flex items-center justify-between">
+          <div className="text-meta text-ink-500">
             Stub: real channel integration is wired in the next iteration.
           </div>
           <div className="flex gap-2">
             <button
               onClick={onClose}
-              className="px-3 py-2 text-sm text-paper-700 hover:text-paper-900 rounded-md"
+              className="px-3 py-2 text-sm text-ink-700 hover:text-ink-900 rounded-md"
             >
               Cancel
             </button>
             <button
               onClick={submit}
               disabled={sending || !!ack || !body.trim() || !audienceId}
-              className="px-4 py-2 text-sm font-medium bg-accent-600 hover:bg-accent-700 text-paper-50 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-sm font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {ack ? "✓ Sent" : sending ? "Sending…" : heading}
             </button>
@@ -225,10 +225,10 @@ function Section({
   return (
     <div>
       <div className="flex items-baseline justify-between mb-2">
-        <div className="text-meta uppercase tracking-wider text-paper-500">
+        <div className="text-meta uppercase tracking-wider text-ink-500">
           {label}
         </div>
-        {hint && <div className="text-meta text-paper-500">{hint}</div>}
+        {hint && <div className="text-meta text-ink-500">{hint}</div>}
       </div>
       {children}
     </div>

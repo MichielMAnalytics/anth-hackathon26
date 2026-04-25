@@ -35,24 +35,24 @@ export function AudiencePicker({
             className={clsx(
               "text-left rounded-lg border px-3 py-2.5 transition",
               active
-                ? "border-accent-600 bg-accent-50 ring-1 ring-accent-600/20"
-                : "border-paper-200 bg-paper-50 hover:bg-paper-100",
+                ? "border-brand-600 bg-brand-50 ring-1 ring-brand-600/20"
+                : "border-surface-300 bg-white hover:bg-surface-100",
             )}
           >
             <div className="flex items-center gap-2">
-              <div className="text-sm font-medium text-paper-900 truncate">
+              <div className="text-sm font-medium text-ink-900 truncate">
                 {a.label}
               </div>
               {inRegion && (
-                <span className="text-meta uppercase tracking-wider text-accent-600 border border-accent-200 bg-accent-50 px-1.5 py-px rounded">
+                <span className="text-meta uppercase tracking-wider text-brand-700 border border-brand-200 bg-brand-50 px-1.5 py-px rounded">
                   in region
                 </span>
               )}
             </div>
-            <div className="text-xs text-paper-600 mt-0.5 truncate">
+            <div className="text-xs text-ink-600 mt-0.5 truncate">
               {a.description}
             </div>
-            <div className="mt-1.5 flex items-center gap-3 text-meta text-paper-500">
+            <div className="mt-1.5 flex items-center gap-3 text-meta text-ink-500">
               <span className="font-mono">
                 {new Intl.NumberFormat("en-US").format(a.count)} reachable
               </span>

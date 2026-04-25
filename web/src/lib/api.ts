@@ -58,6 +58,20 @@ export async function sendBroadcast(
   return r.json();
 }
 
+export async function sendCaseMessage(
+  incidentId: string,
+  body: string,
+  via: Channel,
+  audienceId?: string,
+): Promise<{ ok: boolean; broadcast?: BroadcastAck | null }> {
+  const r = await fetch(`/api/cases/${incidentId}/messages`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ body, via, audienceId }),
+  });
+  return r.json();
+}
+
 export function openStream(onEvent: (e: StreamEvent) => void) {
   const proto = window.location.protocol === "https:" ? "wss" : "ws";
   const url = `${proto}://${window.location.host}/ws/stream`;

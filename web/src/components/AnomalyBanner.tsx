@@ -10,7 +10,7 @@ export function AnomalyBanner({ stats }: { stats: RegionStats }) {
         <div className="text-sm font-medium text-sev-high">
           Unusual volume in {stats.label}
         </div>
-        <div className="text-xs text-paper-700 mt-0.5">
+        <div className="text-xs text-ink-700 mt-0.5">
           {describeAnomaly(stats)} Something may be developing — consider a
           broadcast.
         </div>

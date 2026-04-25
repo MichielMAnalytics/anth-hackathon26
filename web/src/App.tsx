@@ -8,12 +8,13 @@ import {
   seedDemo,
 } from "./lib/api";
 import { useStore, type Tab } from "./lib/store";
+import { CasesView } from "./pages/CasesView";
 import { MapView } from "./pages/MapView";
-import { IncidentsView } from "./pages/IncidentsView";
+import { FilterBar } from "./components/FilterBar";
 
 const TABS: { id: Tab; label: string; enabled: boolean }[] = [
+  { id: "cases", label: "Cases", enabled: true },
   { id: "map", label: "Map", enabled: true },
-  { id: "incidents", label: "Incidents", enabled: true },
   { id: "stream", label: "Stream", enabled: false },
 ];
 
@@ -48,7 +49,7 @@ export function App() {
 
     const tick = setInterval(() => {
       fetchRegionStats().then(setRegions).catch(() => {});
-    }, 8000);
+    }, 10000);
 
     return () => {
       closeStream();
@@ -70,21 +71,21 @@ export function App() {
   }
 
   return (
-    <div className="h-full flex flex-col bg-paper-50 text-paper-900">
-      <header className="h-14 border-b border-paper-200 bg-paper-50/95 backdrop-blur-sm px-6 flex items-center justify-between shrink-0">
+    <div className="h-full flex flex-col bg-surface-100 text-ink-900">
+      <header className="h-14 border-b border-surface-300 bg-white px-6 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-md bg-accent-600 flex items-center justify-center text-paper-50 font-display text-sm leading-none">
-              N
+            <div className="w-7 h-7 rounded bg-brand-600 flex items-center justify-center text-white font-bold text-sm leading-none">
+              W
             </div>
-            <div className="font-display text-lg text-paper-900 tracking-tight">
-              NGO Hub
-              <span className="ml-2 text-meta font-mono uppercase tracking-wider text-paper-500 align-middle">
-                v0.2
+            <div className="font-display text-base font-bold text-ink-900 tracking-tight">
+              War Child
+              <span className="ml-1.5 text-ink-500 font-medium">
+                · Field Hub
               </span>
             </div>
           </div>
-          <nav className="flex items-center gap-1">
+          <nav className="flex items-center gap-0.5">
             {TABS.map((t) => (
               <button
                 key={t.id}
@@ -92,20 +93,20 @@ export function App() {
                 onClick={() => t.enabled && setTab(t.id)}
                 className={clsx(
                   "relative px-3.5 py-1.5 text-sm font-medium rounded-md transition",
-                  !t.enabled && "text-paper-400 cursor-not-allowed",
+                  !t.enabled && "text-ink-400 cursor-not-allowed",
                   t.enabled && activeTab === t.id
-                    ? "text-paper-900 bg-paper-100"
-                    : t.enabled && "text-paper-600 hover:text-paper-900",
+                    ? "text-ink-900"
+                    : t.enabled && "text-ink-600 hover:text-ink-900",
                 )}
               >
                 {t.label}
                 {!t.enabled && (
-                  <span className="ml-1.5 text-meta uppercase tracking-wider text-paper-400">
+                  <span className="ml-1.5 text-meta uppercase tracking-wider text-ink-400">
                     soon
                   </span>
                 )}
                 {t.enabled && activeTab === t.id && (
-                  <span className="absolute -bottom-[15px] left-3.5 right-3.5 h-0.5 bg-accent-600 rounded-full" />
+                  <span className="absolute -bottom-[15px] left-3.5 right-3.5 h-0.5 bg-brand-600 rounded-full" />
                 )}
               </button>
             ))}
@@ -115,20 +116,22 @@ export function App() {
           <button
             onClick={handleSeed}
             disabled={seeding}
-            className="text-sm px-3 py-1.5 border border-paper-300 text-paper-700 rounded-md hover:bg-paper-100 disabled:opacity-50"
+            className="text-sm px-3 py-1.5 border border-surface-300 text-ink-700 rounded-md hover:bg-surface-100 disabled:opacity-50"
           >
             {seeding ? "Seeding…" : "Seed demo"}
           </button>
-          <div className="flex items-center gap-2 text-meta font-mono text-paper-600 px-2.5 py-1 rounded-full border border-paper-200 bg-paper-50">
+          <div className="flex items-center gap-2 text-meta font-mono text-ink-600 px-2.5 py-1 rounded-full border border-surface-300 bg-white">
             <span className="w-1.5 h-1.5 rounded-full bg-sev-low" />
-            operator@ngo
+            operator@warchild
           </div>
         </div>
       </header>
 
+      <FilterBar />
+
       <div className="flex-1 min-h-0">
+        {activeTab === "cases" && <CasesView />}
         {activeTab === "map" && <MapView />}
-        {activeTab === "incidents" && <IncidentsView />}
       </div>
     </div>
   );

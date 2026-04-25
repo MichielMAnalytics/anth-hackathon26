@@ -13,7 +13,8 @@ export function RegionPanel() {
   const setTab = useStore((s) => s.setTab);
   const selectIncident = useStore((s) => s.selectIncident);
 
-  const stats = selectedRegion ? regions[selectedRegion] : null;
+  const stats =
+    selectedRegion && selectedRegion !== "all" ? regions[selectedRegion] : null;
 
   const inRegion = useMemo(() => {
     if (!selectedRegion) return [];
@@ -40,10 +41,10 @@ export function RegionPanel() {
   if (!stats) {
     return (
       <div className="p-8 text-center">
-        <div className="font-display text-lg text-paper-700">
+        <div className="font-display text-lg text-ink-700">
           Select a region
         </div>
-        <div className="mt-2 text-sm text-paper-600">
+        <div className="mt-2 text-sm text-ink-600">
           Click a marker on the map to see reach, message volume, and any
           anomalies.
         </div>
@@ -54,10 +55,10 @@ export function RegionPanel() {
   return (
     <div className="p-6 space-y-5">
       <div>
-        <div className="text-meta uppercase tracking-wider text-paper-500">
+        <div className="text-meta uppercase tracking-wider text-ink-500">
           Region
         </div>
-        <div className="font-display text-2xl text-paper-900 mt-0.5">
+        <div className="font-display text-2xl font-semibold text-ink-900 mt-0.5">
           {stats.label}
         </div>
       </div>
@@ -76,7 +77,7 @@ export function RegionPanel() {
       </div>
 
       <div>
-        <div className="text-meta uppercase tracking-wider text-paper-500 mb-2">
+        <div className="text-meta uppercase tracking-wider text-ink-500 mb-2">
           Last 30 minutes
         </div>
         <Sparkline data={spark} width={280} height={48} />
@@ -84,7 +85,7 @@ export function RegionPanel() {
 
       {inRegion.length > 0 && (
         <div>
-          <div className="text-meta uppercase tracking-wider text-paper-500 mb-2">
+          <div className="text-meta uppercase tracking-wider text-ink-500 mb-2">
             Incidents in this region
           </div>
           <ul className="space-y-1.5">
@@ -93,15 +94,15 @@ export function RegionPanel() {
                 <button
                   onClick={() => {
                     selectIncident(inc.id);
-                    setTab("incidents");
+                    setTab("cases");
                   }}
-                  className="w-full text-left px-3 py-2 rounded-md border border-paper-200 bg-paper-50 hover:bg-paper-100 transition flex items-center gap-2"
+                  className="w-full text-left px-3 py-2 rounded-md border border-surface-300 bg-white hover:bg-surface-100 transition flex items-center gap-2"
                 >
                   <SeverityChip severity={inc.severity} />
-                  <span className="text-sm text-paper-900 truncate">
+                  <span className="text-sm text-ink-900 truncate">
                     {inc.title}
                   </span>
-                  <span className="ml-auto text-meta text-paper-500 font-mono">
+                  <span className="ml-auto text-meta text-ink-500 font-mono">
                     {inc.messageCount} msg
                   </span>
                 </button>
@@ -124,15 +125,15 @@ function Stat({
   hint?: string;
 }) {
   return (
-    <div className="rounded-lg border border-paper-200 bg-paper-50 px-3 py-2.5">
-      <div className="text-meta uppercase tracking-wider text-paper-500">
+    <div className="rounded-lg border border-surface-300 bg-white px-3 py-2.5">
+      <div className="text-meta uppercase tracking-wider text-ink-500">
         {label}
       </div>
-      <div className="font-mono text-lg text-paper-900 mt-0.5 leading-tight">
+      <div className="font-mono text-lg text-ink-900 mt-0.5 leading-tight">
         {value}
       </div>
       {hint && (
-        <div className="text-meta text-paper-500 mt-0.5">{hint}</div>
+        <div className="text-meta text-ink-500 mt-0.5">{hint}</div>
       )}
     </div>
   );

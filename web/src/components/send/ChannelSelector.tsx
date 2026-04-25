@@ -43,27 +43,27 @@ export function ChannelSelector({ value, onChange }: Props) {
             className={clsx(
               "text-left rounded-lg border px-3 py-2.5 transition",
               active
-                ? "border-accent-600 bg-accent-50 ring-1 ring-accent-600/20"
-                : "border-paper-200 bg-paper-50 hover:bg-paper-100",
+                ? "border-brand-600 bg-brand-50 ring-1 ring-brand-600/20"
+                : "border-surface-300 bg-white hover:bg-surface-100",
             )}
           >
             <div className="flex items-center gap-2">
               <div
                 className={clsx(
                   "w-3.5 h-3.5 rounded-full border-2",
-                  active ? "border-accent-600 bg-accent-600" : "border-paper-400",
+                  active ? "border-brand-600 bg-brand-600" : "border-surface-400",
                 )}
               />
-              <div className="text-sm font-medium text-paper-900">
+              <div className="text-sm font-medium text-ink-900">
                 {o.label}
               </div>
               {o.recommended && (
-                <span className="text-meta uppercase tracking-wider text-accent-600 border border-accent-200 bg-paper-50 px-1.5 py-px rounded ml-auto">
+                <span className="text-meta uppercase tracking-wider text-brand-700 border border-brand-200 bg-white px-1.5 py-px rounded ml-auto">
                   recommended
                 </span>
               )}
             </div>
-            <div className="text-xs text-paper-600 mt-1 leading-snug">
+            <div className="text-xs text-ink-600 mt-1 leading-snug">
               {o.hint}
             </div>
           </button>

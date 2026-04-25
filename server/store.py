@@ -60,6 +60,15 @@ class Store:
         with self._lock:
             return list(self._messages.get(incident_id, []))
 
+    def append_outbound(self, message: Message) -> None:
+        with self._lock:
+            inc = self._incidents.get(message.incidentId)
+            if inc is None:
+                return
+            self._messages[message.incidentId].append(message)
+            inc.messageCount += 1
+            inc.lastActivity = message.ts
+
     def msgs_per_minute(self, region: Region, window_seconds: int = 60) -> float:
         cutoff = datetime.now(timezone.utc) - timedelta(seconds=window_seconds)
         with self._lock:
