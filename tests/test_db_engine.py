@@ -1,4 +1,3 @@
-import pytest
 from sqlalchemy import text
 
 from server.db.engine import get_engine
