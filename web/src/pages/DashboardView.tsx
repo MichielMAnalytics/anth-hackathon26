@@ -121,18 +121,18 @@ export function DashboardView() {
   }
 
   return (
-    <div className="h-full grid grid-cols-[1fr_360px] min-h-0 bg-surface-100">
-      <main className="overflow-y-auto px-6 py-6">
+    <div className="h-full flex flex-col md:grid md:grid-cols-[1fr_360px] min-h-0 bg-surface-100">
+      <main className="overflow-y-auto px-4 sm:px-6 py-5 sm:py-6">
         <div className="max-w-3xl mx-auto space-y-4">
-          <header className="flex items-end justify-between gap-4">
+          <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
             <div>
               <div className="text-meta uppercase tracking-wider text-ink-500">
                 Insights
               </div>
-              <h1 className="font-display text-2xl font-bold text-ink-900 tracking-tight mt-0.5">
+              <h1 className="font-display text-xl sm:text-2xl font-bold text-ink-900 tracking-tight mt-0.5">
                 Where to act first
               </h1>
-              <p className="text-sm text-ink-600 mt-1 max-w-prose">
+              <p className="hidden sm:block text-sm text-ink-600 mt-1 max-w-prose">
                 Regions ranked by urgency. Each card surfaces the patterns
                 across recent civilian messages and a one-click broadcast we
                 think will help.
@@ -166,8 +166,8 @@ export function DashboardView() {
         </div>
       </main>
 
-      <aside className="border-l border-surface-300 bg-surface-50 overflow-y-auto">
-        <div className="p-5 space-y-5">
+      <aside className="md:border-l border-t md:border-t-0 border-surface-300 bg-surface-50 md:overflow-y-auto">
+        <div className="p-4 sm:p-5 space-y-4 sm:space-y-5">
           <div>
             <div className="text-meta uppercase tracking-wider text-ink-500">
               Recent distress
