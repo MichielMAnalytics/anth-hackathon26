@@ -1,51 +1,52 @@
 # Deploy to boxd.sh
 
-The app is a single Docker image built from the repo root.
+The app is one Docker image built from the repo root. boxd VMs ship with Docker pre-installed.
 
 ## One-time
 
 ```bash
-# install the boxd CLI (see https://docs.boxd.sh/)
-curl -fsSL https://boxd.sh/install | sh
-boxd auth login
+# install the boxd CLI (macOS arm64 / Linux x86_64 + arm64)
+curl -fsSL https://boxd.sh/downloads/cli/install.sh | sh
+
+# authenticate (opens browser)
+~/.local/bin/boxd login
+~/.local/bin/boxd whoami     # sanity check
 ```
 
-## Provision + deploy
+Add `~/.local/bin` to your PATH if you want to call `boxd` directly.
+
+## Deploy
 
 ```bash
-# 1. create a machine
-boxd machines create --name ngo-hub
-
-# 2. ssh in and pull the repo
-boxd ssh ngo-hub <<'SH'
-  set -e
-  if ! command -v git >/dev/null; then sudo apt-get update && sudo apt-get install -y git; fi
-  if [ ! -d anth-hackathon26 ]; then
-    git clone https://github.com/MichielMAnalytics/anth-hackathon26.git
-  fi
-  cd anth-hackathon26
-  git pull
-  docker compose up -d --build
-SH
-
-# 3. expose on HTTPS
-#    boxd auto-assigns <name>.boxd.sh -> the machine's public IP.
-#    we just need traffic on :443 to reach :8080. exact CLI varies; one of:
-boxd proxy add ngo-hub --port 8080
-# or, if proxy is configured per-machine in the dashboard,
-# point :443 -> :8080 there.
+./deploy/boxd-up.sh ngo-hub
 ```
+
+That script:
+1. Creates a VM `ngo-hub` if it doesn't exist (`boxd new --name=ngo-hub`).
+2. Points the default subdomain proxy at port 8080 (`boxd proxy set-port`).
+3. Clones / pulls the repo on the VM and runs `docker compose up -d --build`.
+
+App is live at: **`https://ngo-hub.boxd.sh`**.
 
 ## Update after a code change
 
 ```bash
-boxd ssh ngo-hub 'cd anth-hackathon26 && git pull && docker compose up -d --build'
+git push                     # push to GitHub
+./deploy/boxd-up.sh ngo-hub  # re-runs git pull + compose up --build on the VM
 ```
 
 ## Sanity check
 
 ```bash
-curl https://ngo-hub.boxd.sh/api/incidents | jq .
+curl https://ngo-hub.boxd.sh/api/incidents | head
 ```
 
-Should return an array of seeded incidents.
+Should return seeded incidents JSON.
+
+## Misc
+
+```bash
+boxd connect ngo-hub                          # interactive SSH
+boxd exec ngo-hub -- 'docker compose logs -f' # tail logs
+boxd destroy ngo-hub -y                       # tear it down
+```
