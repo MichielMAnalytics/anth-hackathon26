@@ -104,3 +104,56 @@ export interface RegionTimeline {
   buckets: TimelineBucket[];
   total: number;
 }
+
+export interface DashboardTheme {
+  need: string;
+  label: string;
+  action: string;
+  count: number;
+  distinctSenders: number;
+  distressCount: number;
+  locations: string[];
+  suggestedAudienceId: string | null;
+  messageIds: string[];
+  incidentIds?: string[];
+}
+
+export interface DashboardRegion {
+  region: Region;
+  label: string;
+  lat: number;
+  lon: number;
+  urgency: number;
+  anomaly: boolean;
+  msgsPerMin: number;
+  baselineMsgsPerMin: number;
+  openCases: number;
+  messageCount: number;
+  distressCount: number;
+  distinctSenders: number;
+  sparkline: number[];
+  themes: DashboardTheme[];
+  cases: {
+    id: string;
+    title: string;
+    category: Category;
+    severity: Severity;
+    messageCount: number;
+  }[];
+}
+
+export interface RecentDistressItem {
+  messageId: string;
+  incidentId: string;
+  region: Region;
+  regionLabel: string;
+  from: string;
+  body: string;
+  ts: string;
+}
+
+export interface Dashboard {
+  windowMinutes: number;
+  regions: DashboardRegion[];
+  recentDistress: RecentDistressItem[];
+}

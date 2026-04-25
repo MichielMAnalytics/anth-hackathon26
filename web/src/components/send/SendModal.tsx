@@ -17,6 +17,12 @@ interface Props {
   incident: Incident;
   audiences: Audience[];
   onClose: () => void;
+  defaults?: {
+    audienceId?: string;
+    body?: string;
+    channel?: Channel;
+    region?: Region;
+  };
 }
 
 const REGION_LABEL: Record<Region, string> = {
@@ -76,13 +82,15 @@ function defaultBody(mode: SendMode, incident: Incident): string {
   return incident.title;
 }
 
-export function SendModal({ mode, incident, audiences, onClose }: Props) {
-  const [region, setRegion] = useState<Region>(incident.region);
-  const [audienceId, setAudienceId] = useState(() =>
-    defaultAudienceFor(mode, incident.category, incident.region, audiences),
+export function SendModal({ mode, incident, audiences, onClose, defaults }: Props) {
+  const [region, setRegion] = useState<Region>(defaults?.region ?? incident.region);
+  const [audienceId, setAudienceId] = useState(
+    () =>
+      defaults?.audienceId ??
+      defaultAudienceFor(mode, incident.category, incident.region, audiences),
   );
-  const [channel, setChannel] = useState<Channel>("fallback");
-  const [body, setBody] = useState(() => defaultBody(mode, incident));
+  const [channel, setChannel] = useState<Channel>(defaults?.channel ?? "fallback");
+  const [body, setBody] = useState(() => defaults?.body ?? defaultBody(mode, incident));
   const [sending, setSending] = useState(false);
   const [ack, setAck] = useState<BroadcastAck | null>(null);
 

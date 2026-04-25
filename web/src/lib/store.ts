@@ -17,7 +17,7 @@ const SEV_RANK: Record<Severity, number> = {
 };
 export { SEV_RANK };
 
-export type Tab = "cases" | "map" | "stream";
+export type Tab = "dashboard" | "cases" | "map" | "stream";
 export type IssueFilter = Category | "all";
 
 interface State {
@@ -50,7 +50,7 @@ export const useStore = create<State>((set) => ({
   selectedIncidentId: null,
   selectedRegion: "all",
   issueFilter: "all",
-  activeTab: "cases",
+  activeTab: "dashboard",
 
   setIncidents: (list) =>
     set({ incidents: Object.fromEntries(list.map((i) => [i.id, i])) }),

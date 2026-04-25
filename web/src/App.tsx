@@ -8,11 +8,13 @@ import {
   seedDemo,
 } from "./lib/api";
 import { useStore, type Tab } from "./lib/store";
+import { DashboardView } from "./pages/DashboardView";
 import { CasesView } from "./pages/CasesView";
 import { MapView } from "./pages/MapView";
 import { FilterBar } from "./components/FilterBar";
 
 const TABS: { id: Tab; label: string; enabled: boolean }[] = [
+  { id: "dashboard", label: "Dashboard", enabled: true },
   { id: "cases", label: "Cases", enabled: true },
   { id: "map", label: "Map", enabled: true },
   { id: "stream", label: "Stream", enabled: false },
@@ -127,9 +129,10 @@ export function App() {
         </div>
       </header>
 
-      <FilterBar />
+      {activeTab !== "dashboard" && <FilterBar />}
 
       <div className="flex-1 min-h-0">
+        {activeTab === "dashboard" && <DashboardView />}
         {activeTab === "cases" && <CasesView />}
         {activeTab === "map" && <MapView />}
       </div>

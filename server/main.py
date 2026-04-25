@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import audiences as audiences_module
+from . import dashboard as dashboard_module
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -100,6 +101,11 @@ async def ingest(event: IngestEvent):
 @app.get("/api/audiences")
 def list_audiences() -> list[dict]:
     return [json.loads(a.model_dump_json(by_alias=True)) for a in audiences_module.AUDIENCES]
+
+
+@app.get("/api/dashboard")
+def get_dashboard(window: int = 60):
+    return dashboard_module.build_dashboard(window_minutes=window)
 
 
 @app.get("/api/regions/{region}/timeline")

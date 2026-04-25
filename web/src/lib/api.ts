@@ -2,6 +2,7 @@ import type {
   Audience,
   BroadcastAck,
   Channel,
+  Dashboard,
   Incident,
   Message,
   Region,
@@ -32,6 +33,12 @@ export async function fetchAudiences(): Promise<Audience[]> {
 export async function fetchRegionStats(): Promise<RegionStats[]> {
   const r = await fetch("/api/regions/stats");
   if (!r.ok) throw new Error("regions");
+  return r.json();
+}
+
+export async function fetchDashboard(): Promise<Dashboard> {
+  const r = await fetch("/api/dashboard");
+  if (!r.ok) throw new Error("dashboard");
   return r.json();
 }
 
