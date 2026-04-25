@@ -78,28 +78,28 @@ export function App() {
 
   return (
     <div className="h-full flex flex-col bg-surface-100 text-ink-900">
-      <header className="h-14 border-b border-surface-300 bg-white px-6 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2.5">
+      <header className="h-14 border-b border-surface-300 bg-white px-3 sm:px-6 flex items-center justify-between gap-2 shrink-0">
+        <div className="flex items-center gap-3 sm:gap-6 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
             <div className="w-7 h-7 rounded bg-brand-600 flex items-center justify-center text-white font-bold text-sm leading-none">
               W
             </div>
-            <div className="font-display text-base font-bold text-ink-900 tracking-tight">
+            <div className="hidden sm:block font-display text-base font-bold text-ink-900 tracking-tight whitespace-nowrap">
               War Child
               <span className="ml-1.5 text-ink-500 font-medium">
                 · Field Hub
               </span>
             </div>
           </div>
-          <nav className="flex items-center gap-0.5">
+          <nav className="flex items-center gap-0.5 overflow-x-auto -mx-1 px-1">
             {TABS.map((t) => (
               <button
                 key={t.id}
                 disabled={!t.enabled}
                 onClick={() => t.enabled && setTab(t.id)}
                 className={clsx(
-                  "relative px-3.5 py-1.5 text-sm font-medium rounded-md transition",
-                  !t.enabled && "text-ink-400 cursor-not-allowed",
+                  "relative px-2.5 sm:px-3.5 py-1.5 text-sm font-medium rounded-md transition whitespace-nowrap",
+                  !t.enabled && "text-ink-400 cursor-not-allowed hidden sm:inline-flex",
                   t.enabled && activeTab === t.id
                     ? "text-ink-900"
                     : t.enabled && "text-ink-600 hover:text-ink-900",
@@ -112,13 +112,13 @@ export function App() {
                   </span>
                 )}
                 {t.enabled && activeTab === t.id && (
-                  <span className="absolute -bottom-[15px] left-3.5 right-3.5 h-0.5 bg-brand-600 rounded-full" />
+                  <span className="absolute -bottom-[15px] left-2.5 right-2.5 sm:left-3.5 sm:right-3.5 h-0.5 bg-brand-600 rounded-full" />
                 )}
               </button>
             ))}
           </nav>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <OperatorSwitcher />
         </div>
       </header>
