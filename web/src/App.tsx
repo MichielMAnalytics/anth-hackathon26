@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import clsx from "clsx";
 import {
   fetchAudiences,
@@ -7,7 +7,6 @@ import {
   fetchOperators,
   fetchRegionStats,
   openStream,
-  seedDemo,
 } from "./lib/api";
 import { OperatorSwitcher } from "./components/OperatorSwitcher";
 import { useStore, type Tab } from "./lib/store";
@@ -34,8 +33,6 @@ export function App() {
   const select = useStore((s) => s.selectIncident);
   const activeTab = useStore((s) => s.activeTab);
   const setTab = useStore((s) => s.setTab);
-
-  const [seeding, setSeeding] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -78,19 +75,6 @@ export function App() {
     setOperators,
     select,
   ]);
-
-  async function handleSeed() {
-    setSeeding(true);
-    await seedDemo();
-    const [incidents, regions] = await Promise.all([
-      fetchIncidents(),
-      fetchRegionStats(),
-    ]);
-    setIncidents(incidents);
-    setRegions(regions);
-    if (incidents.length > 0) select(incidents[0].id);
-    setSeeding(false);
-  }
 
   return (
     <div className="h-full flex flex-col bg-surface-100 text-ink-900">
@@ -135,13 +119,6 @@ export function App() {
           </nav>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            onClick={handleSeed}
-            disabled={seeding}
-            className="text-sm px-3 py-1.5 border border-surface-300 text-ink-700 rounded-md hover:bg-surface-100 disabled:opacity-50"
-          >
-            {seeding ? "Seeding…" : "Seed demo"}
-          </button>
           <OperatorSwitcher />
         </div>
       </header>

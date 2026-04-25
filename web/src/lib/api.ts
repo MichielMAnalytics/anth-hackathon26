@@ -73,10 +73,6 @@ export async function fetchRegionTimeline(
   return r.json();
 }
 
-export async function seedDemo(): Promise<void> {
-  await fetch("/api/sim/seed", { method: "POST" });
-}
-
 export async function sendBroadcast(
   mode: SendMode,
   payload: {
