@@ -15,33 +15,40 @@ from server.api.sim import router as sim_router
 from server.api.ws import router as ws_router
 from server.db.engine import get_engine, get_session_maker
 from server.eventbus.postgres import PostgresEventBus
+from server.workers.agent import agent_worker_loop
 from server.workers.triage import triage_worker_loop
 
 logger = logging.getLogger(__name__)
 
-_worker_task: Optional[asyncio.Task] = None
+_triage_task: Optional[asyncio.Task] = None
+_agent_task: Optional[asyncio.Task] = None
 _event_bus: Optional[PostgresEventBus] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _worker_task, _event_bus
+    global _triage_task, _agent_task, _event_bus
     engine = get_engine()
     session_maker = get_session_maker()
     _event_bus = PostgresEventBus(engine)
-    _worker_task = asyncio.create_task(
+    _triage_task = asyncio.create_task(
         triage_worker_loop(_event_bus, session_maker),
         name="triage-worker",
+    )
+    _agent_task = asyncio.create_task(
+        agent_worker_loop(_event_bus, session_maker),
+        name="agent-worker",
     )
     try:
         yield
     finally:
-        if _worker_task and not _worker_task.done():
-            _worker_task.cancel()
-            try:
-                await asyncio.wait_for(_worker_task, timeout=5.0)
-            except (asyncio.CancelledError, asyncio.TimeoutError):
-                pass
+        for t in (_triage_task, _agent_task):
+            if t and not t.done():
+                t.cancel()
+                try:
+                    await asyncio.wait_for(t, timeout=5.0)
+                except (asyncio.CancelledError, asyncio.TimeoutError):
+                    pass
         if _event_bus:
             await _event_bus.close()
 

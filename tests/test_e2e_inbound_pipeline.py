@@ -10,8 +10,10 @@ from starlette.testclient import TestClient
 
 from server.config import get_settings
 from server.db.alerts import Alert
+from server.db.decisions import AgentDecision, ToolCall
 from server.db.identity import NGO, Account
 from server.db.messages import Bucket, InboundMessage, TriagedMessage
+from server.db.outbound import Sighting
 
 
 @pytest.fixture(autouse=True)
@@ -37,6 +39,9 @@ def sync_seed():
         sm = async_sessionmaker(engine, expire_on_commit=False)
         async with sm() as s:
             # Purge in FK-safe order so /inbound sees exactly 1 NGO.
+            await s.execute(delete(ToolCall))
+            await s.execute(delete(AgentDecision))
+            await s.execute(delete(Sighting))
             await s.execute(delete(TriagedMessage))
             await s.execute(delete(Bucket))
             await s.execute(delete(InboundMessage))
@@ -90,6 +95,35 @@ def sync_seed():
                 await s.execute(
                     delete(TriagedMessage).where(TriagedMessage.msg_id.in_(inbound_ids))
                 )
+            bucket_keys = [
+                row[0]
+                for row in (
+                    await s.execute(
+                        select(Bucket.bucket_key).where(Bucket.ngo_id == out["ngo_id"])
+                    )
+                ).all()
+            ]
+            if bucket_keys:
+                decision_ids = [
+                    row[0]
+                    for row in (
+                        await s.execute(
+                            select(AgentDecision.decision_id).where(
+                                AgentDecision.bucket_key.in_(bucket_keys)
+                            )
+                        )
+                    ).all()
+                ]
+                if decision_ids:
+                    await s.execute(
+                        delete(ToolCall).where(ToolCall.decision_id.in_(decision_ids))
+                    )
+                    await s.execute(
+                        delete(AgentDecision).where(
+                            AgentDecision.decision_id.in_(decision_ids)
+                        )
+                    )
+            await s.execute(delete(Sighting).where(Sighting.ngo_id == out["ngo_id"]))
             await s.execute(delete(Bucket).where(Bucket.ngo_id == out["ngo_id"]))
             await s.execute(
                 delete(InboundMessage).where(InboundMessage.ngo_id == out["ngo_id"])
@@ -175,11 +209,10 @@ def test_full_inbound_pipeline(sync_seed, monkeypatch):
                 pool.shutdown(wait=False, cancel_futures=True)
 
         t.join(timeout=5.0)
-        # Give the triage worker time to finish processing BEFORE we exit
-        # the TestClient context (which cancels the worker task).
-        # The WS event fires on new_inbound (before triage), so triage may
-        # still be running when we receive the WS notification.
-        time.sleep(3.0)
+        # Give the triage + agent workers time to finish processing BEFORE we
+        # exit the TestClient context (which cancels both tasks). The WS event
+        # fires on new_inbound, but triage AND agent must complete after that.
+        time.sleep(6.0)
 
     assert len(received) >= 1, "Expected at least one WS event — none received"
     evt = received[0]
@@ -235,6 +268,44 @@ def test_full_inbound_pipeline(sync_seed, monkeypatch):
             ).scalars().all()
             assert len(bucket_rows) == 1, (
                 f"Expected 1 Bucket row, got {len(bucket_rows)}"
+            )
+
+        # Wait for the agent worker to consume the bucket and write a decision.
+        bucket_key = triaged_rows[0].bucket_key
+        decision = None
+        for _ in range(40):
+            async with sm() as s:
+                rows = (
+                    await s.execute(
+                        select(AgentDecision).where(
+                            AgentDecision.bucket_key == bucket_key
+                        )
+                    )
+                ).scalars().all()
+            if rows:
+                decision = rows[0]
+                break
+            await asyncio.sleep(0.25)
+
+        assert decision is not None, (
+            "AgentDecision never appeared for bucket within timeout"
+        )
+
+        async with sm() as s:
+            calls = (
+                await s.execute(
+                    select(ToolCall).where(ToolCall.decision_id == decision.decision_id)
+                )
+            ).scalars().all()
+            assert len(calls) >= 1, "Expected at least one ToolCall row"
+            assert {c.tool_name for c in calls} & {"send", "record_sighting", "noop"}, (
+                f"No expected tool present in: {[c.tool_name for c in calls]}"
+            )
+
+            # Bucket should be marked done.
+            done_bucket = await s.get(Bucket, bucket_key)
+            assert done_bucket.status == "done", (
+                f"Bucket left in status={done_bucket.status}"
             )
 
     loop = asyncio.new_event_loop()

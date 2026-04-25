@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from server.db.engine import get_engine, get_session_maker
 
 
-async def test_worker_task_alive_during_request(test_engine, monkeypatch):
+async def test_triage_task_alive_during_request(test_engine, monkeypatch):
     get_engine.cache_clear()
     get_session_maker.cache_clear()
     monkeypatch.setattr("server.db.engine.get_engine", lambda: test_engine)
@@ -23,8 +23,11 @@ async def test_worker_task_alive_during_request(test_engine, monkeypatch):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             resp = await ac.get("/health")
             assert resp.status_code == 200
-            assert main_module._worker_task is not None
-            assert not main_module._worker_task.done()
+            assert main_module._triage_task is not None
+            assert not main_module._triage_task.done()
+            assert main_module._agent_task is not None
+            assert not main_module._agent_task.done()
 
     # After lifespan shutdown
-    assert main_module._worker_task is None or main_module._worker_task.done()
+    assert main_module._triage_task is None or main_module._triage_task.done()
+    assert main_module._agent_task is None or main_module._agent_task.done()
