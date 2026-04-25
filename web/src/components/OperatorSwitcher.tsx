@@ -33,14 +33,15 @@ export function OperatorSwitcher() {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-full border border-surface-300 bg-white hover:bg-surface-50"
+        className="flex items-center gap-2 pl-1 pr-1 sm:pr-2 py-1 rounded-full border border-surface-300 bg-white hover:bg-surface-50"
+        aria-label={`Operator ${me.name}, ${me.role}`}
       >
         <img
           alt=""
           src={`https://api.dicebear.com/9.x/avataaars/svg?seed=${me.avatarSeed}`}
           className="w-6 h-6 rounded-full bg-surface-200"
         />
-        <div className="text-left leading-tight">
+        <div className="hidden sm:block text-left leading-tight">
           <div className="text-meta font-medium text-ink-900 truncate max-w-[140px]">
             {me.name}
           </div>
@@ -59,7 +60,7 @@ export function OperatorSwitcher() {
             )}
           </div>
         </div>
-        <span className="text-ink-500 text-xs ml-0.5">▾</span>
+        <span className="hidden sm:inline text-ink-500 text-xs ml-0.5">▾</span>
       </button>
 
       {open && (

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import {
   fetchAudiences,
@@ -36,6 +36,18 @@ export function App() {
   const setTab = useStore((s) => s.setTab);
 
   const [seeding, setSeeding] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
+  const navRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (navRef.current && !navRef.current.contains(e.target as Node)) {
+        setNavOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
 
   useEffect(() => {
     Promise.all([
@@ -107,15 +119,65 @@ export function App() {
               </span>
             </div>
           </div>
-          <nav className="flex items-center gap-0.5 overflow-x-auto -mx-1 px-1">
+          {/* mobile burger menu */}
+          <div ref={navRef} className="md:hidden relative">
+            <button
+              onClick={() => setNavOpen((o) => !o)}
+              className="flex items-center gap-2 px-2.5 py-1.5 text-sm font-medium text-ink-900 rounded-md hover:bg-surface-100 border border-surface-300"
+              aria-label="Open navigation"
+              aria-expanded={navOpen}
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M2 3h10M2 7h10M2 11h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+              {TABS.find((t) => t.id === activeTab)?.label ?? "Menu"}
+            </button>
+            {navOpen && (
+              <div className="absolute left-0 top-full mt-1.5 z-40 w-44 bg-white border border-surface-300 rounded-md shadow-modal overflow-hidden">
+                {TABS.map((t) => {
+                  const active = t.id === activeTab;
+                  return (
+                    <button
+                      key={t.id}
+                      disabled={!t.enabled}
+                      onClick={() => {
+                        if (!t.enabled) return;
+                        setTab(t.id);
+                        setNavOpen(false);
+                      }}
+                      className={clsx(
+                        "w-full text-left px-3 py-2.5 text-sm flex items-center justify-between transition",
+                        !t.enabled && "text-ink-400 cursor-not-allowed",
+                        t.enabled && active && "bg-brand-50/60 text-ink-900 font-medium",
+                        t.enabled && !active && "text-ink-700 hover:bg-surface-50",
+                      )}
+                    >
+                      <span>{t.label}</span>
+                      {!t.enabled && (
+                        <span className="text-meta uppercase tracking-wider text-ink-400">
+                          soon
+                        </span>
+                      )}
+                      {t.enabled && active && (
+                        <span className="text-brand-600 text-sm leading-none">●</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* desktop tabs */}
+          <nav className="hidden md:flex items-center gap-0.5">
             {TABS.map((t) => (
               <button
                 key={t.id}
                 disabled={!t.enabled}
                 onClick={() => t.enabled && setTab(t.id)}
                 className={clsx(
-                  "relative px-2.5 sm:px-3.5 py-1.5 text-sm font-medium rounded-md transition whitespace-nowrap",
-                  !t.enabled && "text-ink-400 cursor-not-allowed hidden sm:inline-flex",
+                  "relative px-3.5 py-1.5 text-sm font-medium rounded-md transition whitespace-nowrap",
+                  !t.enabled && "text-ink-400 cursor-not-allowed",
                   t.enabled && activeTab === t.id
                     ? "text-ink-900"
                     : t.enabled && "text-ink-600 hover:text-ink-900",
@@ -128,7 +190,7 @@ export function App() {
                   </span>
                 )}
                 {t.enabled && activeTab === t.id && (
-                  <span className="absolute -bottom-[15px] left-2.5 right-2.5 sm:left-3.5 sm:right-3.5 h-0.5 bg-brand-600 rounded-full" />
+                  <span className="absolute -bottom-[15px] left-3.5 right-3.5 h-0.5 bg-brand-600 rounded-full" />
                 )}
               </button>
             ))}
