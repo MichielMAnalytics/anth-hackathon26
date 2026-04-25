@@ -27,12 +27,12 @@ export function RegionCard({ region, onAct }: Props) {
   return (
     <div className="bg-white border border-surface-300 rounded-lg shadow-soft overflow-hidden">
       <div className="px-5 py-4 border-b border-surface-200">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
+          <div className="min-w-0 flex-1">
             <div className="text-meta uppercase tracking-wider text-ink-500">
               Region
             </div>
-            <div className="font-display text-xl font-semibold text-ink-900 mt-0.5 truncate">
+            <div className="font-display text-xl font-semibold text-ink-900 mt-0.5">
               {region.label}
             </div>
             <div className="mt-1.5 text-meta text-ink-500 flex items-center gap-3">
@@ -58,7 +58,7 @@ export function RegionCard({ region, onAct }: Props) {
               </span>
             </div>
           </div>
-          <div className="shrink-0 flex flex-col items-end gap-2">
+          <div className="shrink-0 flex flex-row sm:flex-col items-center sm:items-end gap-2 flex-wrap">
             <UrgencyMeter value={region.urgency} />
             {region.anomaly && (
               <span className="text-meta uppercase tracking-wider text-sev-high border border-sev-high/30 bg-sev-high/5 px-2 py-0.5 rounded-full">
