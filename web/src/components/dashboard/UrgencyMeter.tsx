@@ -18,7 +18,7 @@ export function UrgencyMeter({ value, size = "md" }: Props) {
     <div className="flex items-center gap-2.5 min-w-0">
       <div
         className={clsx(
-          "relative w-32 rounded-full bg-surface-200 overflow-hidden",
+          "relative w-24 sm:w-28 lg:w-24 xl:w-32 rounded-full bg-surface-200 overflow-hidden",
           size === "sm" ? "h-1.5" : "h-2",
         )}
       >

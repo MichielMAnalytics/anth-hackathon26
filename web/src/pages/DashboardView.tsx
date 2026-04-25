@@ -123,7 +123,7 @@ export function DashboardView() {
   return (
     <div className="h-full overflow-y-auto md:overflow-hidden md:grid md:grid-cols-[1fr_360px] min-h-0 bg-surface-100">
       <main className="px-4 sm:px-6 py-5 sm:py-6 md:overflow-y-auto">
-        <div className="max-w-3xl mx-auto space-y-4">
+        <div className="max-w-3xl lg:max-w-6xl mx-auto space-y-4">
           <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
             <div>
               <div className="text-meta uppercase tracking-wider text-ink-500">
@@ -132,7 +132,7 @@ export function DashboardView() {
               <h1 className="font-display text-xl sm:text-2xl font-bold text-ink-900 tracking-tight mt-0.5">
                 Where to act first
               </h1>
-              <p className="hidden sm:block text-sm text-ink-600 mt-1 max-w-prose">
+              <p className="hidden md:block text-sm text-ink-600 mt-1 max-w-prose">
                 Regions ranked by urgency. Each card surfaces the patterns
                 across recent civilian messages and a one-click broadcast we
                 think will help.
@@ -160,9 +160,11 @@ export function DashboardView() {
             </div>
           )}
 
-          {visibleRegions.map((r) => (
-            <RegionCard key={r.region} region={r} onAct={handleAct} />
-          ))}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+            {visibleRegions.map((r) => (
+              <RegionCard key={r.region} region={r} onAct={handleAct} />
+            ))}
+          </div>
         </div>
       </main>
 
