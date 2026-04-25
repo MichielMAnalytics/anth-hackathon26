@@ -140,7 +140,8 @@ async def incident_messages(
             "via": via,
         })
 
-    outbound_rows = (
+    # Agent-issued outbounds: linked to an AgentDecision via Bucket.alert_id.
+    agent_outbound_rows = (
         await db.execute(
             select(OutboundMessage)
             .join(ToolCall, OutboundMessage.tool_call_id == ToolCall.call_id)
@@ -149,6 +150,19 @@ async def incident_messages(
             .where(Bucket.alert_id == incident_id)
         )
     ).scalars().all()
+
+    # Operator-issued outbounds: ToolCall has no decision_id; the incident
+    # is recorded inside ToolCall.args -> 'incident_id'.
+    operator_outbound_rows = (
+        await db.execute(
+            select(OutboundMessage)
+            .join(ToolCall, OutboundMessage.tool_call_id == ToolCall.call_id)
+            .where(ToolCall.decision_id.is_(None))
+            .where(ToolCall.args["incident_id"].astext == incident_id)
+        )
+    ).scalars().all()
+
+    outbound_rows = list(agent_outbound_rows) + list(operator_outbound_rows)
 
     for out in outbound_rows:
         via = out.channel if out.channel in ("app", "sms", "fallback") else None

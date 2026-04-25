@@ -9,6 +9,7 @@ from server.api.audiences import router as audiences_router
 from server.api.dashboard import router as dashboard_router
 from server.api.health import router as health_router
 from server.api.incidents import router as incidents_router
+from server.api.operator_actions import router as operator_actions_router
 from server.api.operators import router as operators_router
 from server.api.regions import router as regions_router
 from server.api.sim import router as sim_router
@@ -59,6 +60,7 @@ app.include_router(operators_router)
 app.include_router(audiences_router)
 app.include_router(regions_router)
 app.include_router(incidents_router)
+app.include_router(operator_actions_router)
 app.include_router(dashboard_router)
 app.include_router(sim_router)
 app.include_router(ws_router)
