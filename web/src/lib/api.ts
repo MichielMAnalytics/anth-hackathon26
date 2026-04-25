@@ -6,6 +6,7 @@ import type {
   Message,
   Region,
   RegionStats,
+  RegionTimeline,
   SendMode,
   StreamEvent,
 } from "./types";
@@ -31,6 +32,18 @@ export async function fetchAudiences(): Promise<Audience[]> {
 export async function fetchRegionStats(): Promise<RegionStats[]> {
   const r = await fetch("/api/regions/stats");
   if (!r.ok) throw new Error("regions");
+  return r.json();
+}
+
+export async function fetchRegionTimeline(
+  region: Region,
+  minutes = 60,
+  bucketSeconds = 60,
+): Promise<RegionTimeline> {
+  const r = await fetch(
+    `/api/regions/${region}/timeline?minutes=${minutes}&bucket=${bucketSeconds}`,
+  );
+  if (!r.ok) throw new Error("timeline");
   return r.json();
 }
 

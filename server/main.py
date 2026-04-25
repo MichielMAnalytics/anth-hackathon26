@@ -102,6 +102,23 @@ def list_audiences() -> list[dict]:
     return [json.loads(a.model_dump_json(by_alias=True)) for a in audiences_module.AUDIENCES]
 
 
+@app.get("/api/regions/{region}/timeline")
+def region_timeline(region: str, minutes: int = 60, bucket: int = 60):
+    if region not in audiences_module.REGION_META:
+        return JSONResponse({"error": "unknown region"}, status_code=404)
+    series = store.timeline(region, minutes=minutes, bucket_seconds=bucket)
+    total = sum(c for _, c in series)
+    return {
+        "region": region,
+        "minutes": minutes,
+        "bucketSeconds": bucket,
+        "buckets": [
+            {"ts": t.isoformat(), "count": c} for t, c in series
+        ],
+        "total": total,
+    }
+
+
 @app.get("/api/regions/stats")
 def region_stats() -> list[dict]:
     out: list[RegionStats] = []

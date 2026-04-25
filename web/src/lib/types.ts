@@ -91,3 +91,16 @@ export interface BroadcastAck {
 }
 
 export type SendMode = "alert" | "request";
+
+export interface TimelineBucket {
+  ts: string;
+  count: number;
+}
+
+export interface RegionTimeline {
+  region: Region;
+  minutes: number;
+  bucketSeconds: number;
+  buckets: TimelineBucket[];
+  total: number;
+}

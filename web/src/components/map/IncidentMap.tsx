@@ -2,7 +2,11 @@ import { useEffect, useMemo, useRef } from "react";
 import L from "leaflet";
 import "leaflet.heat";
 import { useStore } from "../../lib/store";
-import type { Incident, Severity } from "../../lib/types";
+import type { Incident, Region, Severity } from "../../lib/types";
+
+const REGION_ZOOM = 10;
+const WORLD_VIEW: L.LatLngExpression = [30, 40];
+const WORLD_ZOOM = 4;
 
 const SEV_COLOR: Record<Severity, string> = {
   critical: "#9b4a3a",
@@ -23,7 +27,9 @@ export function IncidentMap() {
 
   const incidents = useStore((s) => s.incidents);
   const regions = useStore((s) => s.regions);
+  const selectedRegion = useStore((s) => s.selectedRegion);
   const selectRegion = useStore((s) => s.selectRegion);
+  const didInitialFit = useRef(false);
 
   // initialize once
   useEffect(() => {
@@ -31,7 +37,7 @@ export function IncidentMap() {
     const map = L.map(containerRef.current, {
       zoomControl: true,
       attributionControl: false,
-    }).setView([30, 40], 4);
+    }).setView(WORLD_VIEW, WORLD_ZOOM);
 
     L.tileLayer(
       "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
@@ -107,7 +113,9 @@ export function IncidentMap() {
         )
         .on("click", () => {
           selectRegion(inc.region);
-          map.flyTo([inc.lat as number, inc.lon as number], 6, { duration: 0.6 });
+          map.flyTo([inc.lat as number, inc.lon as number], REGION_ZOOM, {
+            duration: 0.6,
+          });
         });
       group.addLayer(c);
     });
@@ -124,11 +132,37 @@ export function IncidentMap() {
         .bindTooltip(rs.label, { direction: "top", offset: [0, -2] })
         .on("click", () => {
           selectRegion(rs.region);
-          map.flyTo([rs.lat, rs.lon], 6, { duration: 0.6 });
+          map.flyTo([rs.lat, rs.lon], REGION_ZOOM, { duration: 0.6 });
         });
       group.addLayer(c);
     });
   }, [heatPoints, incidents, regions, selectRegion]);
+
+  // react to selectedRegion changes (FilterBar, panel selection, etc.)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (selectedRegion === "all") return; // user explicitly chose all
+    const meta = regions[selectedRegion as Region];
+    if (!meta) return;
+    map.flyTo([meta.lat, meta.lon], REGION_ZOOM, { duration: 0.6 });
+  }, [selectedRegion, regions]);
+
+  // on first load with data, fit to the busiest region (no need to wait for click)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || didInitialFit.current) return;
+    const stats = Object.values(regions);
+    if (stats.length === 0) return;
+    const busiest = stats
+      .filter((s) => s.messageCount > 0)
+      .sort((a, b) => b.messageCount - a.messageCount)[0];
+    if (busiest && useStore.getState().selectedRegion === "all") {
+      map.flyTo([busiest.lat, busiest.lon], REGION_ZOOM, { duration: 0 });
+      selectRegion(busiest.region);
+    }
+    didInitialFit.current = true;
+  }, [regions, selectRegion]);
 
   return (
     <div className="relative w-full h-full">

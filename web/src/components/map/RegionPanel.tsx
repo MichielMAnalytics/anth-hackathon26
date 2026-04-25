@@ -1,8 +1,10 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { fetchRegionTimeline } from "../../lib/api";
 import { useStore } from "../../lib/store";
+import type { RegionTimeline } from "../../lib/types";
 import { AnomalyBanner } from "../AnomalyBanner";
-import { Sparkline } from "../Sparkline";
 import { SeverityChip } from "../SeverityChip";
+import { TimelineChart } from "../TimelineChart";
 
 const fmt = new Intl.NumberFormat("en-US");
 
@@ -16,8 +18,28 @@ export function RegionPanel() {
   const stats =
     selectedRegion && selectedRegion !== "all" ? regions[selectedRegion] : null;
 
+  const [timeline, setTimeline] = useState<RegionTimeline | null>(null);
+
+  useEffect(() => {
+    if (!stats) {
+      setTimeline(null);
+      return;
+    }
+    let cancelled = false;
+    const load = () =>
+      fetchRegionTimeline(stats.region, 60, 60)
+        .then((t) => !cancelled && setTimeline(t))
+        .catch(() => {});
+    load();
+    const id = setInterval(load, 8000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [stats?.region]);
+
   const inRegion = useMemo(() => {
-    if (!selectedRegion) return [];
+    if (!selectedRegion || selectedRegion === "all") return [];
     return Object.values(incidents)
       .filter((i) => i.region === selectedRegion)
       .sort(
@@ -27,69 +49,72 @@ export function RegionPanel() {
       );
   }, [selectedRegion, incidents]);
 
-  // synthetic 30-min sparkline using current msgs/min as latest sample
-  const spark = useMemo(() => {
-    if (!stats) return [];
-    const latest = stats.msgsPerMin;
-    const base = stats.baselineMsgsPerMin;
-    return Array.from({ length: 30 }, (_, i) => {
-      const noise = (Math.sin(i * 0.7) + 1) * 0.5;
-      return i < 27 ? base * (0.6 + noise * 0.8) : latest * (0.7 + i * 0.05);
-    });
-  }, [stats]);
-
   if (!stats) {
     return (
       <div className="p-8 text-center">
-        <div className="font-display text-lg text-ink-700">
+        <div className="font-display text-lg font-semibold text-ink-900">
           Select a region
         </div>
         <div className="mt-2 text-sm text-ink-600">
-          Click a marker on the map to see reach, message volume, and any
-          anomalies.
+          Click a marker on the map, or pick a region from the filter bar at
+          the top, to see live message volume and stats.
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-5 space-y-5">
       <div>
         <div className="text-meta uppercase tracking-wider text-ink-500">
           Region
         </div>
-        <div className="font-display text-2xl font-semibold text-ink-900 mt-0.5">
+        <div className="font-display text-2xl font-semibold text-ink-900 mt-0.5 tracking-tight">
           {stats.label}
         </div>
       </div>
 
       <AnomalyBanner stats={stats} />
 
-      <div className="grid grid-cols-2 gap-4">
-        <Stat label="Reachable" value={fmt.format(stats.reachable)} />
-        <Stat label="Active incidents" value={String(stats.incidentCount)} />
-        <Stat label="Messages" value={fmt.format(stats.messageCount)} />
-        <Stat
-          label="Msgs / min"
-          value={stats.msgsPerMin.toFixed(1)}
-          hint={`baseline ${stats.baselineMsgsPerMin.toFixed(1)}`}
-        />
-      </div>
-
-      <div>
-        <div className="text-meta uppercase tracking-wider text-ink-500 mb-2">
-          Last 30 minutes
+      <section className="space-y-2">
+        <div className="flex items-baseline justify-between">
+          <div className="text-meta uppercase tracking-wider text-ink-500">
+            Messages — last 60 min
+          </div>
+          <div className="font-mono text-sm text-ink-900">
+            {timeline ? `${timeline.total} total` : "—"}
+          </div>
         </div>
-        <Sparkline data={spark} width={280} height={48} />
+        <TimelineChart data={timeline} height={140} />
+        <div className="flex items-center justify-between text-meta text-ink-500">
+          <span>
+            now: <span className="font-mono text-ink-900">{stats.msgsPerMin.toFixed(1)}</span>{" "}
+            msgs/min
+          </span>
+          <span>
+            baseline:{" "}
+            <span className="font-mono">
+              {stats.baselineMsgsPerMin.toFixed(1)}
+            </span>
+          </span>
+        </div>
+      </section>
+
+      <div className="grid grid-cols-2 gap-3">
+        <Stat label="Reachable" value={fmt.format(stats.reachable)} />
+        <Stat
+          label="Active cases"
+          value={String(stats.incidentCount)}
+        />
       </div>
 
       {inRegion.length > 0 && (
         <div>
           <div className="text-meta uppercase tracking-wider text-ink-500 mb-2">
-            Incidents in this region
+            Cases in this region
           </div>
           <ul className="space-y-1.5">
-            {inRegion.slice(0, 5).map((inc) => (
+            {inRegion.slice(0, 6).map((inc) => (
               <li key={inc.id}>
                 <button
                   onClick={() => {
@@ -115,15 +140,7 @@ export function RegionPanel() {
   );
 }
 
-function Stat({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-}) {
+function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-surface-300 bg-white px-3 py-2.5">
       <div className="text-meta uppercase tracking-wider text-ink-500">
@@ -132,9 +149,6 @@ function Stat({
       <div className="font-mono text-lg text-ink-900 mt-0.5 leading-tight">
         {value}
       </div>
-      {hint && (
-        <div className="text-meta text-ink-500 mt-0.5">{hint}</div>
-      )}
     </div>
   );
 }

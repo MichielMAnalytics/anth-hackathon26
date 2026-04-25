@@ -69,6 +69,34 @@ class Store:
             inc.messageCount += 1
             inc.lastActivity = message.ts
 
+    def timeline(
+        self, region: Region, minutes: int = 60, bucket_seconds: int = 60
+    ) -> list[tuple[datetime, int]]:
+        """Per-bucket message count for the last `minutes`. Returns list of (bucket_start, count)."""
+        now = datetime.now(timezone.utc)
+        # align to bucket boundary
+        start = now - timedelta(minutes=minutes)
+        n_buckets = max(1, (minutes * 60) // bucket_seconds)
+        # compute bucket index function
+        def bucket_index(t: datetime) -> int:
+            delta = (t - start).total_seconds()
+            return int(delta // bucket_seconds)
+
+        counts = [0] * n_buckets
+        with self._lock:
+            ts_list = list(self._region_ts.get(region, ()))
+        for t in ts_list:
+            if t < start or t > now:
+                continue
+            i = bucket_index(t)
+            if 0 <= i < n_buckets:
+                counts[i] += 1
+
+        return [
+            (start + timedelta(seconds=i * bucket_seconds), counts[i])
+            for i in range(n_buckets)
+        ]
+
     def msgs_per_minute(self, region: Region, window_seconds: int = 60) -> float:
         cutoff = datetime.now(timezone.utc) - timedelta(seconds=window_seconds)
         with self._lock:
