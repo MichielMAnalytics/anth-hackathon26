@@ -13,6 +13,8 @@ from server.db.base import Base
 # (Modules added in subsequent tasks; safe to import as they're created.)
 from server.db import identity  # noqa: F401  (registers tables on Base.metadata)
 from server.db import alerts  # noqa: F401
+from pgvector.sqlalchemy import Vector  # noqa: F401  (so autogenerate sees the type)
+from server.db import messages  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", get_settings().database_url)
