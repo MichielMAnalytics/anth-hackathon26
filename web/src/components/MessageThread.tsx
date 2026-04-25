@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useStore } from "../lib/store";
 import { fetchMessages } from "../lib/api";
 import { MessageBubble } from "./MessageBubble";
@@ -8,8 +8,10 @@ export function MessageThread() {
   const incident = useStore((s) =>
     s.selectedId ? s.incidents[s.selectedId] : null,
   );
-  const messages = useStore((s) =>
-    s.selectedId ? (s.messagesByIncident[s.selectedId] ?? []) : [],
+  const messagesMap = useStore((s) => s.messagesByIncident);
+  const messages = useMemo(
+    () => (selectedId ? (messagesMap[selectedId] ?? []) : []),
+    [selectedId, messagesMap],
   );
   const setMessages = useStore((s) => s.setMessages);
   const scrollRef = useRef<HTMLDivElement>(null);

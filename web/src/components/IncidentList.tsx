@@ -1,6 +1,7 @@
+import { useMemo } from "react";
 import clsx from "clsx";
 import { useStore } from "../lib/store";
-import type { Category } from "../lib/types";
+import type { Category, Severity } from "../lib/types";
 import { SeverityChip } from "./SeverityChip";
 
 const ICONS: Record<Category, string> = {
@@ -9,6 +10,13 @@ const ICONS: Record<Category, string> = {
   medical: "⚕",
   safety: "⚠",
   other: "•",
+};
+
+const SEV_RANK: Record<Severity, number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
 };
 
 function timeAgo(iso: string | null): string {
@@ -21,9 +29,20 @@ function timeAgo(iso: string | null): string {
 }
 
 export function IncidentList() {
-  const sorted = useStore((s) => s.sortedIncidents());
+  const incidents = useStore((s) => s.incidents);
   const selectedId = useStore((s) => s.selectedId);
   const select = useStore((s) => s.select);
+  const sorted = useMemo(() => {
+    const list = Object.values(incidents);
+    list.sort((a, b) => {
+      const r = SEV_RANK[a.severity] - SEV_RANK[b.severity];
+      if (r !== 0) return r;
+      const ta = a.lastActivity ? new Date(a.lastActivity).getTime() : 0;
+      const tb = b.lastActivity ? new Date(b.lastActivity).getTime() : 0;
+      return tb - ta;
+    });
+    return list;
+  }, [incidents]);
 
   return (
     <div className="h-full flex flex-col">
