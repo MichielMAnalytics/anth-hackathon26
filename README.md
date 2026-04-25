@@ -1,5 +1,30 @@
 # P2P Amber Alert Network over Bitchat
 
+## Quick start (NGO Hub UI)
+
+```bash
+# backend
+pip install "fastapi>=0.115" "uvicorn[standard]>=0.32" "pydantic>=2.9"
+SEED_ON_STARTUP=1 uvicorn server.main:app --reload --port 8080
+
+# frontend (separate terminal)
+cd web && npm install && npm run dev
+# open http://localhost:5173
+```
+
+Or with Docker:
+
+```bash
+docker compose up --build
+# open http://localhost:8080
+```
+
+Deploy to boxd.sh: see `deploy/README.md`.
+
+## Routing-agent contract
+
+The teammate's routing agent POSTs each parsed message to `/api/ingest`. See the schema in `server/schemas.py` (`IngestEvent`). The UI subscribes to `WS /ws/stream` and updates live.
+
 ## Context
 
 NGOs operating in warzones need to broadcast missing-person ("amber") alerts to civilians whose phones often have no working cellular or internet. **Bitchat** (Jack Dorsey's BLE mesh app, with Nostr fallback) gives those phones a way to talk to each other without infrastructure: messages hop phone-to-phone over Bluetooth (up to 7 hops), end-to-end encrypted via the Noise Protocol, and fall back to Nostr relays whenever any node has internet.
