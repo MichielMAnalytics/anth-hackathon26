@@ -1,6 +1,39 @@
+import pytest_asyncio
+from sqlalchemy import delete, select
+
 from server.db.alerts import Alert
 from server.db.identity import NGO, Account
 from server.db.messages import InboundMessage
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _isolate_dashboard(test_session_maker):
+    """Purge dashboard-test rows before AND after each test so committed data
+    doesn't leak between runs. Order: messages → accounts → alerts → ngo to
+    respect FK cascades."""
+    async def _purge():
+        async with test_session_maker() as s:
+            ngo_ids = [
+                row[0]
+                for row in (
+                    await s.execute(
+                        select(NGO.ngo_id).where(NGO.name == "Warchild-dash-test")
+                    )
+                ).all()
+            ]
+            if ngo_ids:
+                await s.execute(delete(InboundMessage).where(InboundMessage.ngo_id.in_(ngo_ids)))
+                await s.execute(delete(Alert).where(Alert.ngo_id.in_(ngo_ids)))
+                await s.execute(delete(Account).where(Account.ngo_id.in_(ngo_ids)))
+                await s.execute(delete(NGO).where(NGO.ngo_id.in_(ngo_ids)))
+            # Also defensively delete the specific account phone if any prior
+            # leak happened under a different ngo_id.
+            await s.execute(delete(Account).where(Account.phone == "+9647005556677"))
+            await s.commit()
+
+    await _purge()
+    yield
+    await _purge()
 
 
 async def test_dashboard_shape_no_data(client):
