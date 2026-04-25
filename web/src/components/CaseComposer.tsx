@@ -91,7 +91,7 @@ export function CaseComposer({ incident }: Props) {
                 key={c}
                 onClick={() => setVia(c)}
                 className={clsx(
-                  "px-2.5 py-1 text-xs font-medium transition border-r border-surface-300 last:border-r-0",
+                  "px-3 min-h-[40px] text-xs font-medium transition border-r border-surface-300 last:border-r-0 flex items-center",
                   active
                     ? "bg-brand-600 text-white"
                     : "bg-surface-50 text-ink-700 hover:bg-surface-100",
@@ -121,12 +121,12 @@ export function CaseComposer({ incident }: Props) {
                 ? "Reply — e.g. 'Doctors near Sana'a, can anyone deliver insulin tonight?'"
                 : "Reply on this case…"
           }
-          className="flex-1 resize-none bg-white border border-surface-300 rounded-md px-3 py-2 text-sm text-ink-900 leading-relaxed focus:outline-none focus:border-brand-600 focus:ring-1 focus:ring-brand-600/20"
+          className="flex-1 resize-y bg-white border border-surface-300 rounded-md px-3 py-2 text-sm text-ink-900 leading-relaxed focus:outline-none focus:border-brand-600 focus:ring-1 focus:ring-brand-600/20 md:min-h-[64px]"
         />
         <button
           onClick={send}
           disabled={sending || !body.trim()}
-          className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-md disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+          className="px-4 min-h-[40px] md:min-h-[44px] bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-md disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
         >
           {sending ? "Sending…" : "Send"}
         </button>

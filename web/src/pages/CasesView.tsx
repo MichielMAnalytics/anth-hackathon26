@@ -21,6 +21,9 @@ export function CasesView() {
   const [sendMode, setSendMode] = useState<SendMode | null>(null);
   // Mobile-only nav state. On md+ all panes are visible regardless.
   const [mobilePane, setMobilePane] = useState<MobilePane>("list");
+  // md+ profile rail collapse state. Default open on every mount; persists for
+  // the life of the component. lg defaults still open per design.
+  const [profileOpen, setProfileOpen] = useState(true);
 
   // when a case is selected on mobile, jump straight to its thread
   const showList = !incident || mobilePane === "list";
@@ -31,8 +34,19 @@ export function CasesView() {
     setMobilePane("thread");
   }
 
+  // Grid template depends on whether the right rail is open (md+ only).
+  // When collapsed we drop the third track entirely so the thread fills space.
+  const gridCols = profileOpen
+    ? "md:grid-cols-[240px_1fr_280px] lg:grid-cols-[300px_1fr_360px]"
+    : "md:grid-cols-[240px_1fr] lg:grid-cols-[300px_1fr]";
+
   return (
-    <div className="h-full md:grid md:grid-cols-[240px_1fr_280px] lg:grid-cols-[300px_1fr_360px] min-h-0 relative">
+    <div
+      className={clsx(
+        "h-full md:grid min-h-0 relative",
+        gridCols,
+      )}
+    >
       <aside
         className={clsx(
           "border-r border-surface-300 bg-surface-50 min-h-0 h-full",
@@ -85,13 +99,29 @@ export function CasesView() {
       </main>
 
       {/* desktop right rail */}
-      <aside className="hidden md:flex border-l border-surface-300 bg-white min-h-0 flex-col">
-        <CaseProfile
-          incident={incident}
-          onAlert={() => setSendMode("alert")}
-          onRequest={() => setSendMode("request")}
-        />
-      </aside>
+      {profileOpen && (
+        <aside className="hidden md:flex border-l border-surface-300 bg-white min-h-0 flex-col">
+          <CaseProfile
+            incident={incident}
+            onAlert={() => setSendMode("alert")}
+            onRequest={() => setSendMode("request")}
+            onCollapse={() => setProfileOpen(false)}
+          />
+        </aside>
+      )}
+
+      {/* floating re-open handle when collapsed (md+ only) */}
+      {!profileOpen && (
+        <button
+          type="button"
+          onClick={() => setProfileOpen(true)}
+          aria-label="Show case profile"
+          className="hidden md:flex absolute top-3 right-3 z-20 items-center gap-1.5 px-2.5 h-10 bg-white border border-surface-300 rounded-md text-meta uppercase tracking-wider text-ink-700 hover:bg-surface-100 shadow-sm"
+        >
+          <span aria-hidden="true">◀</span>
+          <span>Profile</span>
+        </button>
+      )}
 
       {/* mobile profile sheet */}
       {showProfile && incident && (
@@ -134,21 +164,35 @@ function CaseProfile({
   incident,
   onAlert,
   onRequest,
+  onCollapse,
 }: {
   incident: ReturnType<typeof useStore.getState>["incidents"][string] | null;
   onAlert: () => void;
   onRequest: () => void;
+  onCollapse?: () => void;
 }) {
   if (!incident) {
     return (
       <>
-        <div className="px-5 py-3.5 border-b border-surface-300">
-          <div className="text-meta uppercase tracking-wider text-ink-500">
-            Case profile
+        <div className="px-5 py-3.5 border-b border-surface-300 flex items-start gap-2">
+          <div className="flex-1 min-w-0">
+            <div className="text-meta uppercase tracking-wider text-ink-500">
+              Case profile
+            </div>
+            <div className="font-display text-lg font-semibold text-ink-900 mt-0.5 leading-snug">
+              —
+            </div>
           </div>
-          <div className="font-display text-lg font-semibold text-ink-900 mt-0.5 leading-snug">
-            —
-          </div>
+          {onCollapse && (
+            <button
+              type="button"
+              onClick={onCollapse}
+              aria-label="Hide case profile"
+              className="hidden md:inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-500 hover:bg-surface-100 hover:text-ink-700"
+            >
+              <span aria-hidden="true">▶</span>
+            </button>
+          )}
         </div>
         <div className="flex-1 overflow-y-auto p-5 text-sm text-ink-500">
           Select a case to see its profile.
@@ -158,13 +202,25 @@ function CaseProfile({
   }
   return (
     <>
-      <div className="px-5 py-3.5 border-b border-surface-300">
-        <div className="text-meta uppercase tracking-wider text-ink-500">
-          Case profile
+      <div className="px-5 py-3.5 border-b border-surface-300 flex items-start gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="text-meta uppercase tracking-wider text-ink-500">
+            Case profile
+          </div>
+          <div className="font-display text-lg font-semibold text-ink-900 mt-0.5 leading-snug">
+            {incident.title}
+          </div>
         </div>
-        <div className="font-display text-lg font-semibold text-ink-900 mt-0.5 leading-snug">
-          {incident.title}
-        </div>
+        {onCollapse && (
+          <button
+            type="button"
+            onClick={onCollapse}
+            aria-label="Hide case profile"
+            className="hidden md:inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-500 hover:bg-surface-100 hover:text-ink-700 shrink-0"
+          >
+            <span aria-hidden="true">▶</span>
+          </button>
+        )}
       </div>
       <div className="flex-1 overflow-y-auto p-5 space-y-5">
         <CaseMiniMap incident={incident} />
