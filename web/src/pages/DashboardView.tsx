@@ -124,28 +124,27 @@ export function DashboardView() {
     <div className="h-full overflow-y-auto md:overflow-hidden md:grid md:grid-cols-[1fr_360px] min-h-0 bg-surface-100">
       <main className="px-4 sm:px-6 py-5 sm:py-6 md:overflow-y-auto">
         <div className="max-w-3xl lg:max-w-6xl mx-auto space-y-4">
-          <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-            <div>
-              <div className="text-meta uppercase tracking-wider text-ink-500">
-                Insights
-              </div>
-              <h1 className="font-display text-xl sm:text-2xl font-bold text-ink-900 tracking-tight mt-0.5">
-                Where to act first
-              </h1>
-              <p className="hidden md:block text-sm text-ink-600 mt-1 max-w-prose">
-                Regions ranked by urgency. Each card surfaces the patterns
-                across recent civilian messages and a one-click broadcast we
-                think will help.
-              </p>
+          <header>
+            <div className="text-meta uppercase tracking-wider text-ink-500">
+              Insights
             </div>
-            {summary && (
-              <div className="flex items-center gap-4 text-meta">
-                <Stat label="Cases" value={summary.cases} />
-                <Stat label="Distress" value={summary.distress} tone="critical" />
-                <Stat label="Anomalies" value={summary.anomalies} tone="high" />
-              </div>
-            )}
+            <h1 className="font-display text-xl sm:text-2xl font-bold text-ink-900 tracking-tight mt-0.5">
+              Where to act first
+            </h1>
+            <p className="hidden md:block text-sm text-ink-600 mt-1 max-w-prose">
+              Regions ranked by urgency. Each card surfaces the patterns
+              across recent civilian messages and a one-click broadcast we
+              think will help.
+            </p>
           </header>
+
+          {summary && (
+            <div className="grid grid-cols-3 gap-3">
+              <Stat label="Open cases" value={summary.cases} />
+              <Stat label="Distress flags" value={summary.distress} tone="critical" />
+              <Stat label="Active anomalies" value={summary.anomalies} tone="high" />
+            </div>
+          )}
 
           {!data && (
             <div className="rounded-lg border border-dashed border-surface-300 bg-white p-8 text-center text-sm text-ink-500">
@@ -211,12 +210,12 @@ function Stat({
         ? "text-sev-high"
         : "text-ink-900";
   return (
-    <div className="flex flex-col items-end">
-      <div className="font-mono text-lg leading-none">
-        <span className={color}>{value}</span>
-      </div>
-      <div className="text-meta uppercase tracking-wider text-ink-500 mt-0.5">
+    <div className="rounded-lg border border-surface-300 bg-white px-4 py-3">
+      <div className="text-meta uppercase tracking-wider text-ink-500">
         {label}
+      </div>
+      <div className={`font-mono text-2xl leading-tight mt-0.5 ${color}`}>
+        {value}
       </div>
     </div>
   );
