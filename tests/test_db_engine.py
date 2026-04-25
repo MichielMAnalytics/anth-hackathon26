@@ -15,3 +15,8 @@ async def test_engine_connects_and_pgvector_loaded():
         )
         assert ext.scalar() == "vector"
     await engine.dispose()
+
+
+async def test_test_db_url_is_separate(test_engine):
+    # The test_engine fixture should point at matching_test, not matching.
+    assert "matching_test" in str(test_engine.url)
