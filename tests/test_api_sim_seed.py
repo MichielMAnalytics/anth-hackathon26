@@ -8,15 +8,12 @@ from server.db.messages import InboundMessage
 _SEED_NGO_NAME = "Warchild"
 
 
-@pytest_asyncio.fixture(autouse=True)
-async def _isolate_seed(test_session_maker):
-    """Purge the Warchild seed NGO and all its dependents before each test."""
+async def _purge_warchild(test_session_maker) -> None:
     async with test_session_maker() as s:
         ngo_ids = (
             await s.execute(select(NGO.ngo_id).where(NGO.name == _SEED_NGO_NAME))
         ).scalars().all()
         if ngo_ids:
-            # inbound messages
             alert_ids = (
                 await s.execute(select(Alert.alert_id).where(Alert.ngo_id.in_(ngo_ids)))
             ).scalars().all()
@@ -33,7 +30,14 @@ async def _isolate_seed(test_session_maker):
             await s.execute(delete(Account).where(Account.ngo_id.in_(ngo_ids)))
             await s.execute(delete(NGO).where(NGO.ngo_id.in_(ngo_ids)))
         await s.commit()
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _isolate_seed(test_session_maker):
+    """Purge the Warchild seed NGO and all its dependents before AND after each test."""
+    await _purge_warchild(test_session_maker)
     yield
+    await _purge_warchild(test_session_maker)
 
 
 async def test_seed_creates_expected_rows(client):

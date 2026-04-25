@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 import pytest_asyncio
 from sqlalchemy import delete, select
 
-from server.db.alerts import Alert
+from server.db.alerts import Alert, AlertDelivery
 from server.db.identity import NGO, Account
 from server.db.messages import InboundMessage
 
@@ -45,7 +45,20 @@ async def _isolate_alerts(test_session_maker):
 
 async def test_incidents_empty(client, test_session_maker):
     # Purge ALL active alerts so we get a clean slate for the empty-list assertion.
+    # Delete FK-referencing rows first to avoid constraint violations from prior runs.
     async with test_session_maker() as s:
+        active_ids = (
+            await s.execute(select(Alert.alert_id).where(Alert.status == "active"))
+        ).scalars().all()
+        if active_ids:
+            await s.execute(
+                delete(InboundMessage).where(
+                    InboundMessage.in_reply_to_alert_id.in_(active_ids)
+                )
+            )
+            await s.execute(
+                delete(AlertDelivery).where(AlertDelivery.alert_id.in_(active_ids))
+            )
         await s.execute(delete(Alert).where(Alert.status == "active"))
         await s.commit()
 
