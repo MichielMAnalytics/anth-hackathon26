@@ -64,7 +64,7 @@ export function OperatorSwitcher() {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-1.5 w-72 bg-white border border-surface-300 rounded-lg shadow-modal z-40 overflow-hidden">
+        <div className="absolute right-0 mt-1.5 w-72 bg-white border border-surface-300 rounded-lg shadow-modal z-[1000] overflow-hidden">
           <div className="px-3 py-2 border-b border-surface-200 text-meta uppercase tracking-wider text-ink-500 bg-surface-50">
             Switch operator
           </div>

@@ -118,7 +118,7 @@ export function App() {
               {TABS.find((t) => t.id === activeTab)?.label ?? "Menu"}
             </button>
             {navOpen && (
-              <div className="absolute left-0 top-full mt-1.5 z-40 w-44 bg-white border border-surface-300 rounded-md shadow-modal overflow-hidden">
+              <div className="absolute left-0 top-full mt-1.5 z-[1000] w-44 bg-white border border-surface-300 rounded-md shadow-modal overflow-hidden">
                 {TABS.map((t) => {
                   const active = t.id === activeTab;
                   return (
