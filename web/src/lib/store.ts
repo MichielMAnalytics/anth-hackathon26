@@ -1,5 +1,12 @@
 import { create } from "zustand";
-import type { Incident, Message, Severity } from "./types";
+import type {
+  Audience,
+  Incident,
+  Message,
+  Region,
+  RegionStats,
+  Severity,
+} from "./types";
 
 const SEV_RANK: Record<Severity, number> = {
   critical: 0,
@@ -7,32 +14,43 @@ const SEV_RANK: Record<Severity, number> = {
   medium: 2,
   low: 3,
 };
+export { SEV_RANK };
+
+export type Tab = "map" | "incidents" | "stream";
 
 interface State {
   incidents: Record<string, Incident>;
   messagesByIncident: Record<string, Message[]>;
-  selectedId: string | null;
+  audiences: Audience[];
+  regions: Record<Region, RegionStats>;
+  selectedIncidentId: string | null;
+  selectedRegion: Region | null;
+  activeTab: Tab;
+
   setIncidents: (list: Incident[]) => void;
   upsertIncident: (inc: Incident) => void;
   appendMessage: (msg: Message) => void;
   setMessages: (incidentId: string, msgs: Message[]) => void;
-  select: (id: string | null) => void;
-  sortedIncidents: () => Incident[];
+  setAudiences: (a: Audience[]) => void;
+  setRegions: (r: RegionStats[]) => void;
+  selectIncident: (id: string | null) => void;
+  selectRegion: (r: Region | null) => void;
+  setTab: (t: Tab) => void;
 }
 
-export const useStore = create<State>((set, get) => ({
+export const useStore = create<State>((set) => ({
   incidents: {},
   messagesByIncident: {},
-  selectedId: null,
+  audiences: [],
+  regions: {} as Record<Region, RegionStats>,
+  selectedIncidentId: null,
+  selectedRegion: null,
+  activeTab: "map",
 
   setIncidents: (list) =>
-    set({
-      incidents: Object.fromEntries(list.map((i) => [i.id, i])),
-    }),
-
+    set({ incidents: Object.fromEntries(list.map((i) => [i.id, i])) }),
   upsertIncident: (inc) =>
     set((s) => ({ incidents: { ...s.incidents, [inc.id]: inc } })),
-
   appendMessage: (msg) =>
     set((s) => {
       const prev = s.messagesByIncident[msg.incidentId] ?? [];
@@ -44,23 +62,19 @@ export const useStore = create<State>((set, get) => ({
         },
       };
     }),
-
   setMessages: (incidentId, msgs) =>
     set((s) => ({
       messagesByIncident: { ...s.messagesByIncident, [incidentId]: msgs },
     })),
-
-  select: (id) => set({ selectedId: id }),
-
-  sortedIncidents: () => {
-    const list = Object.values(get().incidents);
-    list.sort((a, b) => {
-      const r = SEV_RANK[a.severity] - SEV_RANK[b.severity];
-      if (r !== 0) return r;
-      const ta = a.lastActivity ? new Date(a.lastActivity).getTime() : 0;
-      const tb = b.lastActivity ? new Date(b.lastActivity).getTime() : 0;
-      return tb - ta;
-    });
-    return list;
-  },
+  setAudiences: (a) => set({ audiences: a }),
+  setRegions: (r) =>
+    set({
+      regions: Object.fromEntries(r.map((x) => [x.region, x])) as Record<
+        Region,
+        RegionStats
+      >,
+    }),
+  selectIncident: (id) => set({ selectedIncidentId: id }),
+  selectRegion: (r) => set({ selectedRegion: r }),
+  setTab: (t) => set({ activeTab: t }),
 }));

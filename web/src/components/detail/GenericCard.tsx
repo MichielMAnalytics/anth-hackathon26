@@ -9,20 +9,20 @@ export function GenericCard({ incident }: { incident: Incident }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
-        <div className="w-16 h-16 rounded-lg bg-ink-800 flex items-center justify-center text-3xl">
+        <div className="w-16 h-16 rounded-lg bg-paper-200 flex items-center justify-center text-3xl text-paper-700">
           •
         </div>
         <div>
-          <div className="text-xs uppercase tracking-wider text-ink-500">
+          <div className="text-meta uppercase tracking-wider text-paper-500">
             {incident.category}
           </div>
-          <div className="text-base font-semibold text-ink-100">
+          <div className="font-display text-lg text-paper-900">
             {incident.title}
           </div>
         </div>
       </div>
       <Field label="Summary" value={summary} />
-      <pre className="mt-2 text-[11px] font-mono bg-ink-900 border border-ink-800 rounded p-3 overflow-x-auto text-ink-300">
+      <pre className="mt-2 text-meta font-mono bg-paper-100 border border-paper-200 rounded p-3 overflow-x-auto text-paper-700">
         {JSON.stringify(incident.details, null, 2)}
       </pre>
     </div>

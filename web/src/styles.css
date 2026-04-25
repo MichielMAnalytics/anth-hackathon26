@@ -10,6 +10,8 @@ body,
 
 body {
   font-feature-settings: "cv11", "ss01";
+  background: #fbfaf6;
+  color: #221f18;
 }
 
 /* slim scrollbars */
@@ -18,9 +20,23 @@ body {
   height: 8px;
 }
 *::-webkit-scrollbar-thumb {
-  background: #272d38;
+  background: #ddd5c1;
   border-radius: 4px;
 }
 *::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* Fraunces optical sizing for display text */
+.font-display {
+  font-optical-sizing: auto;
+}
+
+/* Leaflet default tile filter slightly desaturates so the map doesn't shout */
+.leaflet-tile-pane {
+  filter: saturate(0.78) brightness(1.02);
+}
+.leaflet-container {
+  background: #f5f2ea !important;
+  font-family: inherit !important;
 }

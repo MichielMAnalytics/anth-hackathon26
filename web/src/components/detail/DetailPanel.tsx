@@ -1,9 +1,9 @@
 import type { Incident } from "../../lib/types";
+import { GenericCard } from "./GenericCard";
+import { MedicalCard } from "./MedicalCard";
 import { MissingPersonCard } from "./MissingPersonCard";
 import { ResourceShortageCard } from "./ResourceShortageCard";
-import { MedicalCard } from "./MedicalCard";
 import { SafetyCard } from "./SafetyCard";
-import { GenericCard } from "./GenericCard";
 
 export function DetailPanel({ incident }: { incident: Incident }) {
   switch (incident.category) {

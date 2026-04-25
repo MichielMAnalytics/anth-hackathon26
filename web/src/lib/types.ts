@@ -7,6 +7,16 @@ export type Category =
 
 export type Severity = "low" | "medium" | "high" | "critical";
 
+export type Region =
+  | "IRQ_BAGHDAD"
+  | "IRQ_MOSUL"
+  | "SYR_ALEPPO"
+  | "SYR_DAMASCUS"
+  | "YEM_SANAA"
+  | "LBN_BEIRUT";
+
+export type Channel = "app" | "sms" | "fallback";
+
 export interface Extracted {
   personRef?: string;
   location?: string;
@@ -21,6 +31,8 @@ export interface Message {
   body: string;
   ts: string;
   geohash?: string | null;
+  lat?: number | null;
+  lon?: number | null;
   extracted?: Extracted | null;
 }
 
@@ -29,6 +41,9 @@ export interface Incident {
   category: Category;
   title: string;
   severity: Severity;
+  region: Region;
+  lat?: number | null;
+  lon?: number | null;
   details: Record<string, unknown>;
   messageCount: number;
   lastActivity: string | null;
@@ -39,3 +54,38 @@ export interface StreamEvent {
   incident: Incident;
   message: Message | null;
 }
+
+export interface Audience {
+  id: string;
+  label: string;
+  description: string;
+  count: number;
+  regions: Region[];
+  roles: string[];
+  channelsAvailable: Channel[];
+}
+
+export interface RegionStats {
+  region: Region;
+  label: string;
+  lat: number;
+  lon: number;
+  reachable: number;
+  incidentCount: number;
+  messageCount: number;
+  msgsPerMin: number;
+  baselineMsgsPerMin: number;
+  anomaly: boolean;
+}
+
+export interface BroadcastAck {
+  ok: boolean;
+  queued: number;
+  batches: number;
+  etaSeconds: number;
+  channels: string[];
+  audienceLabel: string;
+  note: string;
+}
+
+export type SendMode = "alert" | "request";

@@ -12,15 +12,14 @@ interface MissingPersonDetails {
 }
 
 const STATUS_STYLE: Record<string, string> = {
-  open: "bg-sev-critical/15 text-sev-critical border-sev-critical/30",
-  found: "bg-sev-low/15 text-sev-low border-sev-low/30",
-  deceased: "bg-ink-700 text-ink-300 border-ink-600",
+  open: "bg-sev-critical/10 text-sev-critical border-sev-critical/30",
+  found: "bg-sev-low/10 text-sev-low border-sev-low/30",
+  deceased: "bg-paper-200 text-paper-700 border-paper-300",
 };
 
 function fmtAt(iso?: string) {
   if (!iso) return undefined;
-  const d = new Date(iso);
-  return d.toLocaleString();
+  return new Date(iso).toLocaleString();
 }
 
 export function MissingPersonCard({ incident }: { incident: Incident }) {
@@ -32,23 +31,23 @@ export function MissingPersonCard({ incident }: { incident: Incident }) {
           <img
             src={d.photoUrl}
             alt=""
-            className="w-16 h-16 rounded-lg bg-ink-800 object-cover"
+            className="w-16 h-16 rounded-lg bg-paper-200 object-cover border border-paper-200"
           />
         ) : (
-          <div className="w-16 h-16 rounded-lg bg-ink-800 flex items-center justify-center text-2xl">
+          <div className="w-16 h-16 rounded-lg bg-paper-200 flex items-center justify-center text-2xl">
             👤
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <div className="text-base font-semibold text-ink-100 truncate">
+          <div className="font-display text-lg text-paper-900 truncate">
             {d.name ?? "Unknown"}
           </div>
-          <div className="text-xs text-ink-400">
+          <div className="text-meta text-paper-500">
             {d.ageRange ? `Age ~${d.ageRange}` : "Age unknown"}
           </div>
           {d.status && (
             <span
-              className={`mt-1 inline-block text-[10px] px-1.5 py-0.5 rounded border font-mono uppercase tracking-wider ${
+              className={`mt-1 inline-block text-meta px-1.5 py-0.5 rounded border font-medium uppercase tracking-wider ${
                 STATUS_STYLE[d.status] ?? STATUS_STYLE.open
               }`}
             >

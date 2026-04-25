@@ -21,14 +21,14 @@ export function ResourceShortageCard({ incident }: { incident: Incident }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
-        <div className="w-16 h-16 rounded-lg bg-ink-800 flex items-center justify-center text-3xl">
+        <div className="w-16 h-16 rounded-lg bg-paper-200 flex items-center justify-center text-3xl">
           {icon}
         </div>
         <div>
-          <div className="text-xs uppercase tracking-wider text-ink-500">
+          <div className="text-meta uppercase tracking-wider text-paper-500">
             Resource shortage
           </div>
-          <div className="text-base font-semibold text-ink-100 capitalize">
+          <div className="font-display text-lg text-paper-900 capitalize">
             {d.resource ?? "—"}
           </div>
         </div>
@@ -36,7 +36,11 @@ export function ResourceShortageCard({ incident }: { incident: Incident }) {
       <Field label="Location" value={d.location} />
       <Field
         label="Reporters"
-        value={d.reporterCount !== undefined ? `${d.reporterCount} citizen reports` : undefined}
+        value={
+          d.reporterCount !== undefined
+            ? `${d.reporterCount} citizen reports`
+            : undefined
+        }
       />
     </div>
   );

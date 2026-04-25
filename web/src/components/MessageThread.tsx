@@ -4,9 +4,9 @@ import { fetchMessages } from "../lib/api";
 import { MessageBubble } from "./MessageBubble";
 
 export function MessageThread() {
-  const selectedId = useStore((s) => s.selectedId);
+  const selectedId = useStore((s) => s.selectedIncidentId);
   const incident = useStore((s) =>
-    s.selectedId ? s.incidents[s.selectedId] : null,
+    s.selectedIncidentId ? s.incidents[s.selectedIncidentId] : null,
   );
   const messagesMap = useStore((s) => s.messagesByIncident);
   const messages = useMemo(
@@ -30,7 +30,7 @@ export function MessageThread() {
 
   if (!incident) {
     return (
-      <div className="h-full flex items-center justify-center text-sm text-ink-400">
+      <div className="h-full flex items-center justify-center text-sm text-paper-600">
         Select an incident to view its message thread.
       </div>
     );
@@ -41,22 +41,24 @@ export function MessageThread() {
   );
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="px-5 py-3 border-b border-ink-800">
-        <div className="text-xs uppercase tracking-wider text-ink-400">
+    <div className="h-full flex flex-col bg-paper-50">
+      <div className="px-6 py-4 border-b border-paper-200">
+        <div className="text-meta uppercase tracking-wider text-paper-500">
           Thread
         </div>
-        <div className="text-sm font-medium text-ink-100">{incident.title}</div>
+        <div className="font-display text-xl text-paper-900 mt-0.5">
+          {incident.title}
+        </div>
       </div>
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-5">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6">
         {sorted.length === 0 && (
-          <div className="py-10 text-sm text-ink-400">No messages yet.</div>
+          <div className="py-10 text-sm text-paper-600">No messages yet.</div>
         )}
         {sorted.map((m) => (
           <MessageBubble key={m.messageId} msg={m} />
         ))}
       </div>
-      <div className="px-5 py-3 border-t border-ink-800 text-[11px] text-ink-500 italic">
+      <div className="px-6 py-3 border-t border-paper-200 text-meta text-paper-500 italic">
         Read-only feed. The routing agent decides which messages land here.
       </div>
     </div>

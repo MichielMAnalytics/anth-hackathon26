@@ -1,5 +1,6 @@
 import asyncio
 import json
+import math
 import os
 from pathlib import Path
 
@@ -8,7 +9,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .schemas import AlertPayload, IngestEvent, StreamEvent
+from . import audiences as audiences_module
+from .schemas import (
+    BroadcastAck,
+    BroadcastPayload,
+    IngestEvent,
+    RegionStats,
+    StreamEvent,
+)
 from .seed import load_seed
 from .store import store
 
@@ -80,15 +88,95 @@ def list_messages(incident_id: str) -> list[dict]:
 @app.post("/api/ingest")
 async def ingest(event: IngestEvent):
     incident, message = store.upsert(event)
-    await hub.broadcast(
-        StreamEvent(type="message", incident=incident, message=message)
-    )
+    await hub.broadcast(StreamEvent(type="message", incident=incident, message=message))
     return {"ok": True, "incidentId": incident.id, "messageId": message.messageId}
 
 
+@app.get("/api/audiences")
+def list_audiences() -> list[dict]:
+    return [json.loads(a.model_dump_json(by_alias=True)) for a in audiences_module.AUDIENCES]
+
+
+@app.get("/api/regions/stats")
+def region_stats() -> list[dict]:
+    out: list[RegionStats] = []
+    incidents = store.list_incidents()
+    audiences = audiences_module.AUDIENCES
+    for region, meta in audiences_module.REGION_META.items():
+        in_region = [i for i in incidents if i.region == region]
+        msg_count = sum(i.messageCount for i in in_region)
+        reachable = sum(a.count for a in audiences if region in a.regions and "civilian" in a.roles)
+        msgs_per_min = store.msgs_per_minute(region)
+        baseline = store.baseline_msgs_per_minute(region)
+        anomaly = msgs_per_min > 3 * baseline + 2
+        out.append(
+            RegionStats(
+                region=region,
+                label=meta["label"],
+                lat=meta["lat"],
+                lon=meta["lon"],
+                reachable=reachable,
+                incidentCount=len(in_region),
+                messageCount=msg_count,
+                msgsPerMin=round(msgs_per_min, 2),
+                baselineMsgsPerMin=round(baseline, 2),
+                anomaly=anomaly,
+            )
+        )
+    return [json.loads(s.model_dump_json(by_alias=True)) for s in out]
+
+
+def _build_ack(payload: BroadcastPayload, kind: str) -> BroadcastAck:
+    aud = audiences_module.get(payload.audienceId)
+    if aud is None:
+        return BroadcastAck(
+            ok=False,
+            queued=0,
+            batches=0,
+            etaSeconds=0,
+            channels=[payload.channels],
+            audienceLabel="(unknown audience)",
+            note=f"audience {payload.audienceId!r} not found",
+        )
+    # batch size differs by channel
+    if payload.channels == "sms":
+        batch_size = 400
+        channels = ["sms"]
+    elif payload.channels == "app":
+        batch_size = 5000
+        channels = ["app"]
+    else:  # fallback: try app first, SMS for rest
+        batch_size = 1500
+        channels = ["app", "sms"]
+    queued = aud.count
+    batches = max(1, math.ceil(queued / batch_size))
+    eta = batches * 30
+    audience_in_region = (
+        aud.label if not payload.region else f"{aud.label} (filtered to {payload.region})"
+    )
+    note = (
+        f"{kind.capitalize()} queued. Batching to {batches} group"
+        f"{'s' if batches != 1 else ''} of ~{batch_size}; ETA ~{eta}s."
+    )
+    return BroadcastAck(
+        ok=True,
+        queued=queued,
+        batches=batches,
+        etaSeconds=eta,
+        channels=channels,
+        audienceLabel=audience_in_region,
+        note=note,
+    )
+
+
 @app.post("/api/alerts")
-def send_alert(payload: AlertPayload):
-    return {"ok": True, "queued": True, "incidentId": payload.incidentId}
+def send_alert(payload: BroadcastPayload):
+    return json.loads(_build_ack(payload, "alert").model_dump_json(by_alias=True))
+
+
+@app.post("/api/requests")
+def send_request(payload: BroadcastPayload):
+    return json.loads(_build_ack(payload, "request").model_dump_json(by_alias=True))
 
 
 @app.post("/api/sim/seed")

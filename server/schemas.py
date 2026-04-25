@@ -5,6 +5,15 @@ from pydantic import BaseModel, Field
 
 Category = Literal["missing_person", "resource_shortage", "medical", "safety", "other"]
 Severity = Literal["low", "medium", "high", "critical"]
+Region = Literal[
+    "IRQ_BAGHDAD",
+    "IRQ_MOSUL",
+    "SYR_ALEPPO",
+    "SYR_DAMASCUS",
+    "YEM_SANAA",
+    "LBN_BEIRUT",
+]
+Channel = Literal["app", "sms", "fallback"]
 
 
 class Extracted(BaseModel):
@@ -21,6 +30,8 @@ class Message(BaseModel):
     body: str
     ts: datetime
     geohash: str | None = None
+    lat: float | None = None
+    lon: float | None = None
     extracted: Extracted | None = None
 
     model_config = {"populate_by_name": True}
@@ -31,6 +42,9 @@ class Incident(BaseModel):
     category: Category
     title: str
     severity: Severity
+    region: Region
+    lat: float | None = None
+    lon: float | None = None
     details: dict[str, Any] = Field(default_factory=dict)
     messageCount: int = 0
     lastActivity: datetime | None = None
@@ -41,6 +55,8 @@ class IncomingMessage(BaseModel):
     body: str
     ts: datetime
     geohash: str | None = None
+    lat: float | None = None
+    lon: float | None = None
     extracted: Extracted | None = None
 
     model_config = {"populate_by_name": True}
@@ -51,6 +67,9 @@ class IncomingIncident(BaseModel):
     category: Category
     title: str
     severity: Severity
+    region: Region
+    lat: float | None = None
+    lon: float | None = None
     details: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -66,9 +85,47 @@ class StreamEvent(BaseModel):
     message: Message | None = None
 
 
-class AlertPayload(BaseModel):
-    incidentId: str
-    name: str
-    photoUrl: str | None = None
-    lastSeenLocation: str | None = None
-    description: str | None = None
+class Audience(BaseModel):
+    id: str
+    label: str
+    description: str
+    count: int
+    regions: list[Region]
+    roles: list[str] = Field(default_factory=list)
+    channelsAvailable: list[Channel]
+
+
+class RegionStats(BaseModel):
+    region: Region
+    label: str
+    lat: float
+    lon: float
+    reachable: int
+    incidentCount: int
+    messageCount: int
+    msgsPerMin: float
+    baselineMsgsPerMin: float
+    anomaly: bool
+
+
+class BroadcastPayload(BaseModel):
+    audienceId: str
+    channels: Channel = "fallback"
+    region: Region | None = None
+    body: str
+    incidentId: str | None = None
+    attachments: dict[str, Any] = Field(default_factory=dict)
+
+
+# legacy alias retained for backward compat
+AlertPayload = BroadcastPayload
+
+
+class BroadcastAck(BaseModel):
+    ok: bool = True
+    queued: int
+    batches: int
+    etaSeconds: int
+    channels: list[str]
+    audienceLabel: str
+    note: str

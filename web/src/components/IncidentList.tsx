@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import clsx from "clsx";
-import { useStore } from "../lib/store";
-import type { Category, Severity } from "../lib/types";
+import { useStore, SEV_RANK } from "../lib/store";
+import type { Category } from "../lib/types";
 import { SeverityChip } from "./SeverityChip";
 
 const ICONS: Record<Category, string> = {
@@ -10,13 +10,6 @@ const ICONS: Record<Category, string> = {
   medical: "⚕",
   safety: "⚠",
   other: "•",
-};
-
-const SEV_RANK: Record<Severity, number> = {
-  critical: 0,
-  high: 1,
-  medium: 2,
-  low: 3,
 };
 
 function timeAgo(iso: string | null): string {
@@ -28,12 +21,19 @@ function timeAgo(iso: string | null): string {
   return `${Math.round(s / 86400)}d`;
 }
 
-export function IncidentList() {
+export function IncidentList({
+  filterRegion,
+}: {
+  filterRegion?: string | null;
+}) {
   const incidents = useStore((s) => s.incidents);
-  const selectedId = useStore((s) => s.selectedId);
-  const select = useStore((s) => s.select);
+  const selectedId = useStore((s) => s.selectedIncidentId);
+  const select = useStore((s) => s.selectIncident);
+
   const sorted = useMemo(() => {
-    const list = Object.values(incidents);
+    const list = Object.values(incidents).filter(
+      (i) => !filterRegion || i.region === filterRegion,
+    );
     list.sort((a, b) => {
       const r = SEV_RANK[a.severity] - SEV_RANK[b.severity];
       if (r !== 0) return r;
@@ -42,25 +42,27 @@ export function IncidentList() {
       return tb - ta;
     });
     return list;
-  }, [incidents]);
+  }, [incidents, filterRegion]);
 
   return (
     <div className="h-full flex flex-col">
-      <div className="px-4 py-3 border-b border-ink-800 flex items-center justify-between">
-        <div>
-          <div className="text-xs uppercase tracking-wider text-ink-400">
-            Incidents
-          </div>
-          <div className="text-sm text-ink-200">
-            {sorted.length} active
-          </div>
+      <div className="px-5 py-4 border-b border-paper-200 bg-paper-50">
+        <div className="text-meta uppercase tracking-wider text-paper-500">
+          Incidents
+        </div>
+        <div className="font-display text-lg text-paper-900 mt-0.5">
+          {sorted.length} active
+          {filterRegion && (
+            <span className="text-meta font-mono uppercase tracking-wider text-paper-500 ml-2">
+              · {filterRegion}
+            </span>
+          )}
         </div>
       </div>
       <div className="flex-1 overflow-y-auto">
         {sorted.length === 0 && (
-          <div className="p-6 text-sm text-ink-400">
-            No incidents yet. Click <span className="font-mono text-ink-200">Seed demo</span> in
-            the header to load sample data.
+          <div className="p-6 text-sm text-paper-600">
+            No incidents in this view.
           </div>
         )}
         {sorted.map((inc) => {
@@ -70,27 +72,25 @@ export function IncidentList() {
               key={inc.id}
               onClick={() => select(inc.id)}
               className={clsx(
-                "w-full text-left px-4 py-3 border-b border-ink-800/60 transition",
-                active
-                  ? "bg-ink-800"
-                  : "hover:bg-ink-900/60",
+                "w-full text-left px-5 py-3 border-b border-paper-200 transition",
+                active ? "bg-accent-50" : "hover:bg-paper-100 bg-paper-50",
               )}
             >
-              <div className="flex items-start gap-2">
-                <div className="text-lg leading-none mt-0.5">
+              <div className="flex items-start gap-3">
+                <div className="text-base leading-none mt-0.5 text-paper-700">
                   {ICONS[inc.category] ?? "•"}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <SeverityChip severity={inc.severity} />
-                    <div className="text-[11px] text-ink-400 font-mono">
+                    <div className="text-meta font-mono text-paper-500 ml-auto">
                       {timeAgo(inc.lastActivity)}
                     </div>
                   </div>
-                  <div className="mt-1 text-sm font-medium text-ink-100 truncate">
+                  <div className="mt-1.5 text-sm font-medium text-paper-900 leading-snug">
                     {inc.title}
                   </div>
-                  <div className="mt-0.5 text-xs text-ink-400">
+                  <div className="mt-0.5 text-meta text-paper-500">
                     {inc.messageCount} message
                     {inc.messageCount === 1 ? "" : "s"}
                   </div>
