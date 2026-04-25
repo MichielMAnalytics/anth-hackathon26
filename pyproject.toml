@@ -35,3 +35,8 @@ testpaths = ["tests"]
 [tool.ruff]
 target-version = "py312"
 line-length = 100
+
+[dependency-groups]
+dev = [
+    "asgi-lifespan>=2.1.0",
+]
