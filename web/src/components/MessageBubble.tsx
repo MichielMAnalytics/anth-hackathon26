@@ -1,7 +1,10 @@
 import clsx from "clsx";
-import type { Message } from "../lib/types";
+import type { Message, Receipt } from "../lib/types";
 import { useStore } from "../lib/store";
 import { Receipts } from "./case/Receipts";
+
+// stable empty fallback — selector must not return a new array each call
+const NO_RECEIPTS: Receipt[] = [];
 
 function maskPhone(p: string): string {
   if (p.length <= 4) return p;
@@ -17,9 +20,8 @@ function fmtTime(iso: string): string {
 export function MessageBubble({ msg }: { msg: Message }) {
   const ex = msg.extracted ?? undefined;
   const outbound = !!msg.outbound;
-  const receipts = useStore(
-    (s) => s.receiptsByMessage[msg.messageId] ?? [],
-  );
+  const receipts =
+    useStore((s) => s.receiptsByMessage[msg.messageId]) ?? NO_RECEIPTS;
   return (
     <div
       className={clsx(
