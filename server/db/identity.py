@@ -29,6 +29,7 @@ class Account(Base):
     home_geohash: Mapped[Optional[str]] = mapped_column(String(12), nullable=True)
     last_known_geohash: Mapped[Optional[str]] = mapped_column(String(12), nullable=True)
     push_token: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    bitchat_pubkey: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     app_last_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     trust_score: Mapped[float] = mapped_column(Float, default=0.5, nullable=False)
     opted_out: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
