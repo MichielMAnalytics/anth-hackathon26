@@ -87,10 +87,55 @@ Files that change together live together: each domain (`identity`, `alerts`, `me
 
 ---
 
+## Task 0 — Tidy the existing scaffold
+
+The repo already has a junior-dev "NGO Hub" demo: `server/` holds an in-memory FastAPI app (`main.py`, `audiences.py`, `dashboard.py`, `operators.py`, `schemas.py`, `seed.py`, `store.py`) and `pyproject.toml` is named `ngo-hub` with only `fastapi + uvicorn + pydantic`. The frontend in `web/` is good and stays as-is. We delete the dummy backend modules now so Task 1 starts from a clean slate, but we keep `server/__init__.py` so Task 1 can write into it.
+
+**Files:**
+- Delete: `server/main.py`, `server/audiences.py`, `server/dashboard.py`, `server/operators.py`, `server/schemas.py`, `server/seed.py`, `server/store.py`
+- Keep: `server/__init__.py` (will be overwritten in Task 1.3), `web/`, `Dockerfile` (revisited in Task 17 if needed), `docker-compose.yml` (replaced in Task 2)
+
+- [ ] **Step 0.1 — Verify expected files exist**
+
+Run: `ls server/ web/src/lib/api.ts pyproject.toml docker-compose.yml`
+Expected: all listed; the dummy server modules are present.
+
+- [ ] **Step 0.2 — Delete dummy backend modules**
+
+```bash
+rm server/main.py server/audiences.py server/dashboard.py server/operators.py server/schemas.py server/seed.py server/store.py
+```
+
+- [ ] **Step 0.3 — Replace `server/__init__.py` with a minimal placeholder**
+
+`server/__init__.py`:
+```python
+__version__ = "0.1.0"
+```
+
+- [ ] **Step 0.4 — Verify the working tree is clean of dummy code**
+
+Run: `ls server/`
+Expected: only `__init__.py`.
+
+- [ ] **Step 0.5 — Commit the cleanup**
+
+```bash
+git add server/
+git commit -m "chore: remove NGO Hub dummy backend; matching-engine rebuild starts here"
+```
+
+The frontend in `web/` is intentionally left intact. Plan 1 only stands up `/health`; the frontend will be broken-but-loadable until Plans 2–5 wire real endpoints to satisfy `web/src/lib/api.ts`.
+
+---
+
 ## Task 1 — Project scaffold
 
 **Files:**
-- Create: `pyproject.toml`, `server/__init__.py`, `tests/__init__.py`, `tests/test_smoke.py`, `.env.example`, `.gitignore`
+- Replace: `pyproject.toml` (currently `ngo-hub` with minimal deps; we expand it)
+- Already created in Task 0: `server/__init__.py`
+- Create: `tests/__init__.py`, `tests/test_smoke.py`, `.env.example`
+- Modify: `.gitignore` (already exists; ensure `.venv/`, `.env`, `__pycache__/` are present)
 
 - [ ] **Step 1.1 — Write the failing smoke test**
 
@@ -106,12 +151,12 @@ def test_server_module_importable():
 Run: `uv run pytest tests/test_smoke.py -v`
 Expected: `ModuleNotFoundError: No module named 'server'` (or pytest import error)
 
-- [ ] **Step 1.3 — Create the project files**
+- [ ] **Step 1.3 — Replace project files**
 
-`pyproject.toml`:
+Overwrite `pyproject.toml` (the existing `ngo-hub` content is replaced wholesale):
 ```toml
 [project]
-name = "anth-hackathon26"
+name = "matching-engine"
 version = "0.1.0"
 description = "P2P amber alert matching engine"
 requires-python = ">=3.12"
@@ -146,10 +191,7 @@ target-version = "py312"
 line-length = 100
 ```
 
-`server/__init__.py`:
-```python
-__version__ = "0.1.0"
-```
+`server/__init__.py` already created in Task 0; nothing to do here.
 
 `tests/__init__.py`:
 ```python
@@ -164,7 +206,7 @@ ANTHROPIC_API_KEY=
 LOG_LEVEL=INFO
 ```
 
-`.gitignore`:
+Append to `.gitignore` (the file already exists; only add lines that aren't there yet):
 ```
 __pycache__/
 *.pyc
@@ -175,6 +217,7 @@ __pycache__/
 dist/
 build/
 ```
+Run: `cat .gitignore` — verify all eight entries are present (deduplicate manually if any duplicate after append).
 
 - [ ] **Step 1.4 — Install deps and run test, expect pass**
 
@@ -184,7 +227,7 @@ Expected: 1 passed
 - [ ] **Step 1.5 — Commit**
 
 ```bash
-git add pyproject.toml server/__init__.py tests/__init__.py tests/test_smoke.py .env.example .gitignore
+git add pyproject.toml tests/__init__.py tests/test_smoke.py .env.example .gitignore
 git commit -m "feat: project scaffold with FastAPI/SQLAlchemy/pgvector deps"
 ```
 
@@ -192,8 +235,11 @@ git commit -m "feat: project scaffold with FastAPI/SQLAlchemy/pgvector deps"
 
 ## Task 2 — Docker Compose with Postgres + pgvector
 
+The existing `docker-compose.yml` has a single `ngo-hub` service. We replace it with two services: `db` (Postgres + pgvector) for now, and `app` (matching engine) which will be wired up over later plans. For Plan 1 the `app` service is defined but we mostly run uvicorn locally during development; `docker compose up -d db` is the hot path.
+
 **Files:**
-- Create: `docker-compose.yml`, `db/init.sql`, `tests/test_db_engine.py`
+- Replace: `docker-compose.yml`
+- Create: `db/init.sql`, `tests/test_db_engine.py`
 - Create: `server/config.py`, `server/db/__init__.py`, `server/db/engine.py`
 
 - [ ] **Step 2.1 — Write the failing test**
@@ -225,13 +271,14 @@ async def test_engine_connects_and_pgvector_loaded():
 Run: `uv run pytest tests/test_db_engine.py -v`
 Expected: `ModuleNotFoundError` or connection refused.
 
-- [ ] **Step 2.3 — Create docker-compose, init.sql, config, engine**
+- [ ] **Step 2.3 — Replace docker-compose.yml; create init.sql, config, engine**
 
-`docker-compose.yml`:
+Overwrite `docker-compose.yml` (the existing `ngo-hub` service is replaced):
 ```yaml
 services:
   db:
     image: pgvector/pgvector:pg16
+    container_name: matching-db
     environment:
       POSTGRES_DB: matching
       POSTGRES_USER: app
@@ -246,9 +293,23 @@ services:
       timeout: 5s
       retries: 10
 
+  app:
+    build: .
+    image: matching-engine:latest
+    container_name: matching-app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://app:app@db:5432/matching
+      JWT_SECRET: change-me
+    ports: ["8080:8080"]
+
 volumes:
   pgdata:
 ```
+
+The Dockerfile already exists from the NGO Hub scaffold (multi-stage: web build → python runtime). It will be revisited in Task 17 to install the new deps; for Plan 1 we run uvicorn locally rather than via the `app` container.
 
 `db/init.sql`:
 ```sql
@@ -2631,7 +2692,36 @@ async def test_sim_sms_provider_records_send():
 Run: `uv run pytest tests/ -v`
 Expected: all tests pass. There should be roughly 20–25 tests across all files.
 
-- [ ] **Step 17.3 — Boot smoke test**
+- [ ] **Step 17.3 — Update Dockerfile for the new deps**
+
+The current `Dockerfile` was written for the dummy NGO Hub (`pip install fastapi uvicorn pydantic`). Replace the Python-stage `RUN pip install` line with one that installs from `pyproject.toml` plus the alembic migration entrypoint:
+
+In `Dockerfile`, replace:
+```dockerfile
+RUN pip install --no-cache-dir "fastapi>=0.115" "uvicorn[standard]>=0.32" "pydantic>=2.9"
+```
+with:
+```dockerfile
+COPY pyproject.toml .
+RUN pip install --no-cache-dir uv && uv sync --no-dev --frozen-lockfile || pip install --no-cache-dir .
+```
+
+Also append the alembic + db config copies before the `CMD`:
+```dockerfile
+COPY alembic.ini .
+COPY alembic/ ./alembic/
+COPY db/ ./db/
+```
+
+And update the port: `EXPOSE 8080` → `EXPOSE 8000` (or update compose to 8000:8000) — pick one and keep the README in sync.
+
+Build to verify:
+```bash
+docker compose build app
+```
+Expected: build succeeds.
+
+- [ ] **Step 17.4 — Boot smoke test**
 
 Run:
 ```bash
@@ -2649,7 +2739,7 @@ Expected output: `{"status":"ok","db":"ok"}`
 
 Stop the server with Ctrl-C.
 
-- [ ] **Step 17.4 — Verify schema completeness**
+- [ ] **Step 17.5 — Verify schema completeness**
 
 ```bash
 docker compose exec db psql -U app -d matching -c "\dt"
@@ -2666,10 +2756,10 @@ docker compose exec db psql -U app -d matching -c "\dx"
 ```
 Expected output includes the `vector` extension.
 
-- [ ] **Step 17.5 — Commit**
+- [ ] **Step 17.6 — Commit**
 
 ```bash
-git add tests/test_e2e_foundation.py
+git add tests/test_e2e_foundation.py Dockerfile
 git commit -m "test: end-to-end foundation smoke (db + auth + sim sms + pgvector)"
 ```
 
