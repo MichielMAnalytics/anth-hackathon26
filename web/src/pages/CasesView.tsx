@@ -32,7 +32,7 @@ export function CasesView() {
   }
 
   return (
-    <div className="h-full md:grid md:grid-cols-[300px_1fr_360px] min-h-0 relative">
+    <div className="h-full md:grid md:grid-cols-[240px_1fr_280px] lg:grid-cols-[300px_1fr_360px] min-h-0 relative">
       <aside
         className={clsx(
           "border-r border-surface-300 bg-surface-50 min-h-0 h-full",

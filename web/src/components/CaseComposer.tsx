@@ -103,7 +103,7 @@ export function CaseComposer({ incident }: Props) {
           })}
         </div>
 
-        <span className="ml-auto text-meta text-ink-500">
+        <span className="ml-auto text-meta text-ink-500 hidden md:inline">
           ⌘↵ to send
         </span>
       </div>
