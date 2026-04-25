@@ -121,8 +121,8 @@ export function DashboardView() {
   }
 
   return (
-    <div className="h-full flex flex-col md:grid md:grid-cols-[1fr_360px] min-h-0 bg-surface-100">
-      <main className="overflow-y-auto px-4 sm:px-6 py-5 sm:py-6">
+    <div className="h-full overflow-y-auto md:overflow-hidden md:grid md:grid-cols-[1fr_360px] min-h-0 bg-surface-100">
+      <main className="px-4 sm:px-6 py-5 sm:py-6 md:overflow-y-auto">
         <div className="max-w-3xl mx-auto space-y-4">
           <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
             <div>
@@ -166,7 +166,7 @@ export function DashboardView() {
         </div>
       </main>
 
-      <aside className="md:border-l border-t md:border-t-0 border-surface-300 bg-surface-50 md:overflow-y-auto">
+      <aside className="md:border-l border-t md:border-t-0 border-surface-300 bg-surface-50 md:overflow-y-auto md:max-h-full">
         <div className="p-4 sm:p-5 space-y-4 sm:space-y-5">
           <div>
             <div className="text-meta uppercase tracking-wider text-ink-500">

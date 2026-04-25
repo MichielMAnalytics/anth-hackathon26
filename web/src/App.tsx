@@ -33,6 +33,7 @@ export function App() {
   const select = useStore((s) => s.selectIncident);
   const activeTab = useStore((s) => s.activeTab);
   const setTab = useStore((s) => s.setTab);
+  const selectedIncidentId = useStore((s) => s.selectedIncidentId);
 
   const [navOpen, setNavOpen] = useState(false);
   const navRef = useRef<HTMLDivElement>(null);
@@ -186,7 +187,17 @@ export function App() {
         </div>
       </header>
 
-      {activeTab !== "dashboard" && <FilterBar />}
+      {activeTab !== "dashboard" && (
+        <div
+          className={
+            activeTab === "cases" && selectedIncidentId
+              ? "hidden md:block"
+              : ""
+          }
+        >
+          <FilterBar />
+        </div>
+      )}
 
       <div className="flex-1 min-h-0">
         {activeTab === "dashboard" && <DashboardView />}

@@ -154,7 +154,8 @@ export function SendModal({ mode, incident, audiences, onClose, defaults }: Prop
           </div>
           <button
             onClick={onClose}
-            className="text-ink-500 hover:text-ink-900 text-2xl leading-none"
+            className="w-9 h-9 flex items-center justify-center text-ink-500 hover:text-ink-900 hover:bg-surface-100 rounded-full text-2xl leading-none shrink-0"
+            aria-label="Close"
           >
             ×
           </button>
@@ -223,7 +224,12 @@ export function SendModal({ mode, incident, audiences, onClose, defaults }: Prop
               disabled={sending || !!ack || !body.trim() || !audienceId}
               className="px-4 py-2 text-sm font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {ack ? "✓ Sent" : sending ? "Sending…" : heading}
+              {ack ? "✓ Sent" : sending ? "Sending…" : (
+                <>
+                  <span className="md:hidden">Send</span>
+                  <span className="hidden md:inline">{heading}</span>
+                </>
+              )}
             </button>
           </div>
         </div>
