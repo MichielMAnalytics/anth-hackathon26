@@ -16,6 +16,7 @@ from server.db import alerts  # noqa: F401
 from pgvector.sqlalchemy import Vector  # noqa: F401  (so autogenerate sees the type)
 from server.db import messages  # noqa: F401
 from server.db import decisions  # noqa: F401
+from server.db import outbound  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", get_settings().database_url)
