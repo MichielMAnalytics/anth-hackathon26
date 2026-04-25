@@ -5,3 +5,8 @@ node_modules/
 web/dist/
 .DS_Store
 web/tsconfig.tsbuildinfo
+.pytest_cache/
+.env
+*.egg-info/
+build/
+dist/
