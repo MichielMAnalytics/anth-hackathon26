@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/images/safethread-hero.png" alt="SafeThread — Community Emergency Network. When the network breaks, the community is the network." width="100%" />
+</p>
+
 # SafeThread
 
 > A field-coordination platform for NGOs operating in low-connectivity warzones. Civilians signal sightings and needs over **SMS, app push, and a Bluetooth-mesh app (bitchat)**. SafeThread fuses those signals through an **LLM-driven matching engine**, surfaces the right cases to operators in a console, and broadcasts decisions back over the same channels — push-first.
@@ -47,6 +51,76 @@ For a fuller walkthrough with diagrams (including the BLE store-and-forward path
 - **DTN library + mesh transport adapters:** shipped on the `matching-engine` branch.
 - **Real outbound dispatcher** (push + audience cascade): roadmap.
 - **Hub-side BLE radio:** stretch goal (skeleton lands the right shape; needs a Pi to validate).
+
+---
+
+## Architecture at a glance
+
+Five execution nodes, four DB-coupled stages, one operator-in-the-loop surface. Every contract is a Postgres table; every node is restartable, replayable, auditable.
+
+```
+                        ┌─────────────────────────────────────────────┐
+                        │              CIVILIAN DEVICES               │
+                        │  (SafeThread iOS — bitchat-derived)         │
+                        │   SMS  ·  app push  ·  BLE mesh             │
+                        └────────────────┬────────────────────────────┘
+                                         │
+        ┌────────────────────────────────┼────────────────────────────┐
+        │                                │                            │
+        ▼                                ▼                            ▼
+   carrier SMS              POST /api/sim/inbound (HTTP)     POST /app/dtn/deliver
+   (sms_base)                                                (DTN sealed bundle)
+        │                                │                            │
+        └────────────────┬───────────────┴────────────┬───────────────┘
+                         │                            │
+                         ▼                            ▼
+               ┌─────────────────────┐    ┌──────────────────────────┐
+               │   API tier          │    │  DTN dispatcher          │
+               │ (FastAPI mailroom)  │    │  decode · seal-open      │
+               │                     │    │  amber / sighting / chat │
+               └──────────┬──────────┘    └──────────┬───────────────┘
+                          │                          │
+                          ▼                          ▼
+                  ┌──────────────────────────────────────┐
+                  │           InboundMessage             │  ← DB-as-bus
+                  └─────────────────┬────────────────────┘
+                                    │ NOTIFY new_inbound
+                                    ▼
+                  ┌──────────────────────────────────────┐
+                  │  Triage worker  (Haiku)              │
+                  │  classify · geocode · dedupe · embed │
+                  └─────────────────┬────────────────────┘
+                                    │ NOTIFY bucket_open
+                                    ▼
+              ┌───────────────────────────────────────────────┐
+              │   Bucket (alert_id, geohash_4, time_window)   │  ← coalescing primitive
+              └─────────────────────┬─────────────────────────┘
+                                    │ pg_advisory_lock(alert)
+                                    ▼
+                  ┌──────────────────────────────────────┐
+                  │  Agent worker  (Sonnet/Opus)         │
+                  │  retrieve → reason → 14 tools        │
+                  └─────────────────┬────────────────────┘
+                                    │
+                  ┌─────────────────┴────────────────────┐
+                  ▼                                      ▼
+          AgentDecision row                 ToolCall rows (execute or suggest)
+                  │                                      │
+                  │                                      ├── auto_executed → dispatcher
+                  │                                      └── pending → operator console
+                  ▼                                      ▼
+               WS /ws/stream  ────►  NGO console (web/)
+                                     ▲
+                                     │ approve / reject / compose
+                                     │
+                              human operator
+                                     │
+                                     ▼
+                            Outbound dispatcher
+                            (push → SMS → mesh)
+```
+
+For the full breakdown — node-by-node contracts, all 17 tables, every API endpoint, the agent's tool surface, and the operating envelope — see [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ---
 
