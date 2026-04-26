@@ -25,6 +25,7 @@ COPY alembic/ ./alembic/
 COPY db/ ./db/
 
 EXPOSE 8080
-# Run alembic migrations once before serving so the schema exists when
-# the workers boot. Idempotent — re-running does nothing.
-CMD ["sh", "-c", "alembic upgrade head && uvicorn server.main:app --host 0.0.0.0 --port 8080"]
+# Use absolute venv paths so the entrypoint doesn't depend on PATH,
+# which has been bitten by docker layer caching during this build.
+# Migrations run before uvicorn so the schema is ready when workers boot.
+CMD ["sh", "-c", "/app/.venv/bin/alembic upgrade head && /app/.venv/bin/uvicorn server.main:app --host 0.0.0.0 --port 8080"]
