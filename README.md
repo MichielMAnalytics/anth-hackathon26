@@ -1,57 +1,104 @@
-# SafeThread / Matching Engine
+# SafeThread
 
-> A P2P amber-alert matching engine for NGOs operating in low-connectivity warzones. Civilian sightings come in over SMS / app push / Bitchat BLE mesh; an LLM-driven agent loop decides what to do per region, per alert; outbound replies and broadcasts go out over the same channels in reverse, push-first.
+> A field-coordination platform for NGOs operating in low-connectivity warzones. Civilians signal sightings and needs over **SMS, app push, and a Bluetooth-mesh app (bitchat)**. SafeThread fuses those signals through an **LLM-driven matching engine**, surfaces the right cases to operators in a console, and broadcasts decisions back over the same channels — push-first.
 
-This repo is the **server-side matching engine** plus a **React NGO console** that consumes it. It is channel-agnostic at the agent layer with transport adapters at the edges, designed to absorb 1M messages over 5 minutes without data loss and to remain fully auditable and replayable from the database alone.
+This repo contains four cooperating slices that compose into one product:
 
-**Status:** running end-to-end on `main`. Foundation, inbound pipeline, agent worker (stub + real LLM), operator approvals inbox, agent activity feed, rich demo seeder, live replay drip, and heartbeat scheduler are all built and tested (98 passing). Outbound dispatcher (real Twilio/push) and BLE Bitchat transport are deferred.
+| Slice | What it is | Where it lives |
+|---|---|---|
+| **Matching engine** | Backend pipeline that classifies inbound, coalesces by region, runs an agent, and emits decisions | `server/` |
+| **DTN ingest layer** | Decoder + dispatcher for opaque delay-tolerant-network bundles posted by the iOS app | `server/dtn/` *(on `matching-engine` branch)* |
+| **Mesh transport adapters** | `SmsProvider`-shaped adapters: in-process simulator + BLE skeleton | `server/transports/` *(on `matching-engine` branch)* |
+| **NGO console** | React/Vite operator UI: dashboard, cases, map, broadcast composer | `web/` |
+| **Mobile slice** | bitchat-derived iOS app with SafeThread store-and-forward | `mobileapp/` |
+
+**Status:** matching engine + console run end-to-end on `main`. DTN library + mesh transport scaffold land on `matching-engine`. Twilio/push outbound and real-radio BLE are explicit roadmap items.
 
 ---
 
-## Read for humans — executive summary
-
-### The problem
-
-NGOs broadcasting "missing person" (amber) alerts in conflict zones face three compounding problems:
-
-1. **Civilians have intermittent or no connectivity.** Cellular gets cut, internet is sparse, but Bluetooth-mesh apps like Bitchat let phones gossip messages hop-by-hop without infrastructure.
-2. **Inbound is a flood, not a trickle.** A high-profile alert can produce thousands of "I think I saw her" replies across hundreds of locations within minutes — most are noise, some are the case.
-3. **One operator cannot triage that volume in real time.** Mass broadcasts are too risky to fully automate (false positives erode trust); pure-manual triage doesn't scale.
-
-### The solution
-
-A four-stage pipeline that turns floods of inbound civilian messages into a small number of well-reasoned, auditable agent decisions, with the human operator in the loop only where it matters:
+## 1. The architecture in one picture
 
 ```
-Inbound channels  →  API Tier  →  Triage Worker  →  Bucket queue  →  Agent Worker  →  ToolCall queue  →  Outbound Dispatcher  →  Outbound channels
-                     (mailroom)   (cheap LLM)       (coalescing)     (main LLM)        (intent rows)     (provider calls)
+                        ┌─────────────────────────────────────────────┐
+                        │              CIVILIAN DEVICES               │
+                        │  (SafeThread iOS — bitchat-derived)         │
+                        │   SMS  ·  app push  ·  BLE mesh             │
+                        └────────────────┬────────────────────────────┘
+                                         │
+        ┌────────────────────────────────┼────────────────────────────┐
+        │                                │                            │
+        ▼                                ▼                            ▼
+   carrier SMS              POST /api/sim/inbound (HTTP)     POST /app/dtn/deliver
+   (sms_base)                                                (DTN sealed bundle)
+        │                                │                            │
+        └────────────────┬───────────────┴────────────┬───────────────┘
+                         │                            │
+                         ▼                            ▼
+               ┌─────────────────────┐    ┌──────────────────────────┐
+               │   API tier          │    │  DTN dispatcher          │
+               │ (FastAPI mailroom)  │    │  decode · seal-open      │
+               │                     │    │  amber / sighting / chat │
+               └──────────┬──────────┘    └──────────┬───────────────┘
+                          │                          │
+                          ▼                          ▼
+                  ┌──────────────────────────────────────┐
+                  │           InboundMessage             │  ← DB-as-bus
+                  └─────────────────┬────────────────────┘
+                                    │ NOTIFY new_inbound
+                                    ▼
+                  ┌──────────────────────────────────────┐
+                  │  Triage worker  (Haiku)              │
+                  │  classify · geocode · dedupe · embed │
+                  └─────────────────┬────────────────────┘
+                                    │ NOTIFY bucket_open
+                                    ▼
+              ┌───────────────────────────────────────────────┐
+              │   Bucket (alert_id, geohash_4, time_window)   │  ← coalescing primitive
+              └─────────────────────┬─────────────────────────┘
+                                    │ pg_advisory_lock(alert)
+                                    ▼
+                  ┌──────────────────────────────────────┐
+                  │  Agent worker  (Sonnet/Opus)         │
+                  │  retrieve → reason → 14 tools        │
+                  └─────────────────┬────────────────────┘
+                                    │
+                  ┌─────────────────┴────────────────────┐
+                  ▼                                      ▼
+          AgentDecision row                 ToolCall rows (execute or suggest)
+                  │                                      │
+                  │                                      ├── auto_executed → dispatcher
+                  │                                      └── pending → operator console
+                  ▼                                      ▼
+               WS /ws/stream  ────►  NGO console (web/)
+                                     ▲
+                                     │ approve / reject / compose
+                                     │
+                              human operator
+                                     │
+                                     ▼
+                            Outbound dispatcher
+                            (push → SMS → mesh)
 ```
 
-- **Per-message inbound, per-bucket agent.** Many messages collapse into one decision via `(alert_id, geohash_prefix, time_window)` buckets. ~5,000:1 coalescing under spike load.
-- **Two-tier LLM cost profile.** Cheap Haiku-class model for triage (classify, geocode, dedupe). Sonnet/Opus for the agent loop (reason, decide, act).
-- **Channel-agnostic agent.** The agent never knows whether a message arrived over SMS, app push, or Bitchat. Adapters live at the edges.
-- **Push-first cascade.** Outbound prefers app push (free, instant), falls back to SMS (paid, rate-limited), then Bitchat (offline mesh, last resort).
-- **DB-as-bus.** Every contract between components is a Postgres table. No RPC. Every component is restartable, replayable, and auditable from the database alone.
-- **Execute vs suggest.** Low-risk actions (single-sender ack, sighting record) auto-execute. Mass broadcasts and policy changes route to the operator console for approve/reject/edit.
+Five **execution nodes**, four **DB-coupled stages**, one **operator-in-the-loop surface**. Every contract is a Postgres table; every node is restartable, replayable, auditable.
+
+---
+
+## 2. Why it is interesting
+
+- **Spike-handling primitive that actually works.** Buckets coalesce ~1M inbound messages into ~150 agent decisions in 5 minutes for ~$22 of LLM spend. SMS sends still dominate cost (~$3.7k).
+- **Channel-agnostic agent.** The agent never knows whether a signal arrived over SMS, app push, or BLE mesh. Adapters live at the edges; the agent reasons on `InboundMessage` rows.
+- **Push-first cascade.** Outbound prefers app push (free, instant) → SMS (paid, rate-limited) → bitchat mesh (offline, last resort).
+- **DB-as-bus.** No RPC. Every inter-component contract is a Postgres table. `LISTEN/NOTIFY` for wake-ups, advisory locks for serialization.
+- **Execute vs suggest.** Low-risk actions auto-execute; mass broadcasts route to the operator console for approve/reject/edit.
 - **Always alive.** A heartbeat scheduler ticks every active alert on a periodic cadence; the agent runs a consolidation prompt on each. The dashboard breathes even with zero inbound.
+- **Audit by construction.** Every agent decision stores its full multi-turn conversation (`turns JSON`); idempotency keys at every queue boundary; replays are exact.
+- **Multi-tenant schema, single-tenant runtime.** Every table carries `ngo_id`. War Child is the launch tenant.
+- **Hackathon-shaped, production-shaped code.** All four worker nodes run as asyncio tasks in one FastAPI process for the demo. Splitting them into separate deployments is a config change, not a rewrite.
 
-### Why it is interesting
+---
 
-- **Spike-handling primitive that actually works.** The bucket coalesces 1M inbound messages into ~150 agent decisions in 5 minutes for ~$24 of LLM spend (SMS sends still dominate cost at ~$3.7k).
-- **Full audit trail by construction.** Every agent decision stores its full multi-turn conversation (`turns JSON`); idempotency keys at every queue boundary; replays are exact.
-- **Operator-as-co-pilot, not button-pusher.** Suggestions land in an inbox with the agent's reasoning summary attached; one click to approve, reject, or edit before sending.
-- **Multi-tenant from day one.** Every table carries `ngo_id`. Single-NGO runtime, multi-NGO schema.
-- **Hackathon-shaped, production-shaped code.** All four worker nodes run as asyncio tasks in one FastAPI process for the demo. Splitting them into separate deployments is a config change, not a rewrite. Postgres + pgvector + `LISTEN/NOTIFY` + advisory locks from day one — no SQLite half-step.
-
-### Demo flow
-
-1. **Seed** the rich demo scene — 8 alerts across 6 regions, ~30 historic agent decisions, 8 suggestions waiting in the operator inbox, 20 sightings, 4 sighting clusters, 2 trajectories.
-2. **Open the dashboard** — every region card has live content, the activity tape is populated, the approval inbox shows real Sonnet-style reasoning summaries with one-click approve / reject.
-3. **Start the live drip** — one new civilian message every few seconds against a random active alert. Triage classifies it, the agent makes a decision in real time, the activity tape grows, the header pill ticks ($cost, decisions today, pending approvals).
-4. **Approve a suggestion** — see the inbox row animate out, the suggestion-resolved event ride the WebSocket, the dispatcher (when wired) pick it up.
-5. **Wait** — even if you do nothing, the heartbeat scheduler fires synthetic buckets every interval and the agent runs consolidation; tape ticks on its own.
-
-### Quick start
+## 3. Quick start
 
 ```bash
 # 1. bring up Postgres + pgvector
@@ -75,98 +122,154 @@ cd web && npm install && npm run dev
 # open http://localhost:5173
 ```
 
-`.env.example` documents the required env vars: `DATABASE_URL`, `TEST_DATABASE_URL`, `JWT_SECRET`, `ANTHROPIC_API_KEY` (optional — without it the agent runs in deterministic stub mode), `HEARTBEAT_INTERVAL_SEC` (default 300, set lower for demo).
+`.env.example` documents the required env vars: `DATABASE_URL`, `TEST_DATABASE_URL`, `JWT_SECRET`, `ANTHROPIC_API_KEY` (optional — without it both LLM tiers fall back to deterministic stubs), `HEARTBEAT_INTERVAL_SEC` (default 300, set lower for demo).
 
-### Repo layout
+---
+
+## 4. Repo layout
 
 ```
 .
-├── server/                # FastAPI app + workers (asyncio tasks)
-│   ├── api/               # REST + WS routers
-│   ├── db/                # SQLAlchemy 2.0 async models, engine, session
-│   ├── eventbus/          # Postgres LISTEN/NOTIFY pub/sub
-│   ├── llm/               # Triage + Agent LLM clients
-│   ├── sim/               # Demo seeder + replay drip
-│   ├── transports/        # SMS provider protocol + sim impl
-│   └── workers/           # Triage, Agent, Heartbeat loops
-├── alembic/               # DB migrations
-├── db/init.sql            # pgvector extension, test DB
-├── docker-compose.yml     # 2 services: app + db (pgvector/pgvector:pg16)
-├── docs/superpowers/      # Specs + plans (source of truth)
-├── tests/                 # pytest, one file per domain
-├── web/                   # NGO console (React + Vite + Tailwind + Zustand)
-├── mobileapp/             # SafeThread iOS slice (Bitchat-derived)
-└── scripts/               # One-off: real-LLM smoke test
+├── server/                         # FastAPI app + workers (asyncio tasks)
+│   ├── api/                        # REST + WS routers
+│   ├── auth/                       # X-Operator-Id resolver, role checks
+│   ├── db/                         # SQLAlchemy 2.0 async models, engine, session
+│   ├── eventbus/                   # Postgres LISTEN/NOTIFY pub/sub
+│   ├── llm/                        # Triage + Agent LLM clients
+│   ├── sim/                        # Demo seeder + replay drip
+│   ├── transports/                 # Channel adapters
+│   │   ├── sms_base.py / sim_sms.py
+│   │   ├── mesh_base.py            # SmsProvider-shaped mesh interface  (matching-engine)
+│   │   ├── sim_mesh.py             # in-process asyncio mesh           (matching-engine)
+│   │   └── ble_mesh.py             # bleak-based BLE skeleton          (matching-engine)
+│   ├── dtn/                        # DTN ingest library                (matching-engine)
+│   │   ├── packets.py              # fixed-binary codecs (mirror of iOS DTNPackets.swift)
+│   │   ├── seal.py                 # X25519 + HKDF + ChaChaPoly sealed-box
+│   │   ├── amber.py                # tolerant TLV decoders (sighting / chat / amber)
+│   │   ├── dispatcher.py           # async dispatch_bundle(); FK-strict
+│   │   └── store.py                # idempotency cache (dtn_seen_bundle)
+│   ├── workers/                    # Triage, Agent, Heartbeat loops
+│   └── main.py                     # app factory + lifespan
+├── alembic/                        # DB migrations
+├── db/init.sql                     # pgvector extension, test DB
+├── docker-compose.yml              # 2 services: app + db (pgvector/pgvector:pg16)
+├── docs/superpowers/               # Specs + plans (source of truth)
+├── tests/                          # pytest, one file per domain
+├── web/                            # NGO console — see §6
+├── mobileapp/                      # SafeThread iOS (bitchat-derived) — see §7
+└── scripts/                        # One-off: real-LLM smoke test
 ```
 
 ---
 
-## Read for agents — technical reference
-
-> Source of truth is `docs/superpowers/specs/2026-04-25-matching-engine-design.md` (the design spec). Read it before changing anything load-bearing. This section is a fast index, not a replacement.
-
-### 1. Architecture — five nodes, four DB-coupled stages
+## 5. Backend — five nodes, four DB-coupled stages
 
 | # | Node | LLM? | Stateless? | Scales with | Output |
 |---|---|---|---|---|---|
-| 1 | API Tier (mailroom) | no | yes | inbound conn count | `InboundMessage` rows, ack to caller |
-| 2 | Triage Worker | yes — Haiku | yes | inbound msg rate | `TriagedMessage` + `Bucket` rows |
-| 3 | Agent Worker | yes — Sonnet/Opus | yes (idempotent) | bucket rate, capped 1-per-alert via advisory lock | `AgentDecision` + `ToolCall` rows |
-| 4 | Outbound Dispatcher (courier) | no | yes (idempotent) | provider quotas | `OutboundMessage` rows + provider sends |
-| 5 | Data Tier | n/a | stateful | data volume | the truth, the audit log, the vector store |
+| 1 | API tier (mailroom) | no | yes | inbound conn count | `InboundMessage` rows |
+| 2 | DTN dispatcher | no | yes (idempotent) | bundle rate | `InboundMessage` rows + receipts |
+| 3 | Triage worker | yes — Haiku | yes | inbound msg rate | `TriagedMessage` + `Bucket` rows |
+| 4 | Agent worker | yes — Sonnet/Opus | yes (idempotent) | bucket rate, capped 1-per-alert via advisory lock | `AgentDecision` + `ToolCall` rows |
+| 5 | Outbound dispatcher (courier) | no | yes (idempotent) | provider quotas | `OutboundMessage` rows + provider sends |
 
-**Hackathon collapse:** all four worker nodes run as asyncio tasks inside a single FastAPI process; the data tier is a `pgvector/pgvector:pg16` container.
+**Hackathon collapse:** all worker nodes run as asyncio tasks inside a single FastAPI process; the data tier is a `pgvector/pgvector:pg16` container.
 
 **Heartbeat scheduler** (`server/workers/heartbeat.py`): periodic asyncio task inserts a synthetic empty `Bucket` row every `HEARTBEAT_INTERVAL_SEC` per `Alert(status='active')`, driving consolidation runs (cluster pruning, trajectory extension, contradiction surfacing).
 
-**Worker wake-up:** Postgres `LISTEN/NOTIFY` channels behind a `PostgresEventBus` Protocol. Channels currently in use:
-- `new_inbound` — triage worker drains
-- `bucket_open` — agent worker drains
-- `agent_thinking` — UI: region card glow on
-- `decision_made` — UI: activity tape new row
-- `suggestion_pending` — UI: approvals inbox new row
-- `suggestion_resolved` — UI: inbox row removed (`{call_id}|{status}` payload)
-- `incident_upserted` / `toolcalls_pending` / `suggestions_pending` — internal pipeline coordination
-- `ws_push:{account_id}` — reserved for outbound dispatcher (not yet wired)
+**Worker wake-up:** Postgres `LISTEN/NOTIFY` channels behind a `PostgresEventBus` Protocol:
+
+| Channel | Purpose |
+|---|---|
+| `new_inbound` | triage worker drains |
+| `bucket_open` | agent worker drains |
+| `agent_thinking` | UI: region card glow on |
+| `decision_made` | UI: activity tape new row |
+| `suggestion_pending` | UI: approvals inbox new row |
+| `suggestion_resolved` | UI: inbox row removed |
+| `incident_upserted` / `toolcalls_pending` / `suggestions_pending` | internal pipeline coordination |
+| `ws_push:{account_id}` | reserved for outbound dispatcher |
 
 **Per-alert serialization:** Postgres advisory lock keyed off the alert ID. Held for the agent's multi-turn loop + decision write.
 
-### 2. Component contracts
+### 5.1 Component contracts
 
-#### 2.1 API Tier (`server/api/*`)
-Stateless ingress. `current_operator` dep reads the `X-Operator-Id` header against a static registry (full JWT auth deferred). FastAPI routers grouped by purpose, all listed in §3 below.
+**API tier (`server/api/*`).** Stateless ingress. `current_operator` dep reads `X-Operator-Id` against a static registry (full JWT auth deferred). FastAPI routers grouped by purpose, all listed in §8.
 
-#### 2.2 Triage Worker (`server/workers/triage.py`)
-- **LLM client:** bare `anthropic` Python SDK. One `messages.create()` per message with a single tool defined to enforce JSON-schema output. Model `claude-haiku-4-5-20251001`. Falls back to a deterministic stub when `ANTHROPIC_API_KEY` is unset.
-- **Embedding:** deterministic 512-float hash placeholder for the demo (real Voyage / OpenAI embedding is a swap in `server/llm/triage_client.py`).
-- **Output:** `TriagedMessage` row + `Bucket(status='open')` upsert + `bucket_open` notify.
+**DTN dispatcher (`server/dtn/*`, on `matching-engine`).** Pure library — no FastAPI routes. Sibling slice owns `/app/dtn/deliver`. Wire format mirrors `mobileapp/.../DTNPackets.swift` exactly. The HKDF info string `b"safethread-dtn-v1"` is load-bearing — both sides must use the same value. Idempotency via `dtn_seen_bundle`. Caller is expected to verify the bundle's Ed25519 signature against `Account.bitchat_pubkey` before invoking `dispatch_bundle()`.
 
-#### 2.3 Agent Worker (`server/workers/agent.py`)
-- **LLM client:** `claude-agent-sdk` (≥ 0.1.68). One persistent `ClaudeSDKClient` per worker, real-mode lazy-imported only if `ANTHROPIC_API_KEY` is set.
-- **Configuration** (`server/llm/agent_client.py`): `setting_sources=[]`, `permission_mode="bypassPermissions"`, `max_turns=8`, `max_budget_usd=0.50`, model `claude-sonnet-4-5` / fallback `claude-opus-4-1`, `enable_file_checkpointing=False`. All 14 matching-engine tools registered as an in-process MCP server via `create_sdk_mcp_server`.
-- **Stub mode**: when no API key, `stub_decide` synthesizes a deterministic decision (record sighting + ack) so the full pipeline runs end-to-end without network or cost.
-- **Per-decision flow:**
-  1. Claim a `Bucket` (`FOR UPDATE SKIP LOCKED`).
-  2. Acquire `pg_try_advisory_lock(hashtext(alert_id))`.
-  3. Publish `agent_thinking` event.
-  4. Load context via 8 parallel queries (`asyncio.gather` over triaged messages, recent decisions, sightings, clusters, trajectories, tag assignments, account snapshots, dispatch backlog).
-  5. Run multi-turn loop (real or stub).
-  6. Persist `AgentDecision` + N `ToolCall` rows; apply execute-mode side-effects inline (Sighting/Cluster/Trajectory/Tag DB writes).
-  7. Publish `decision_made` and one `suggestion_pending` per pending tool call.
-  8. Mark bucket done; release advisory lock.
-- **Watchdog:** wraps the loop catching `ProcessError`/`CLIConnectionError`; on subprocess death, recreates the client and releases the bucket back. Bucket retries up to 3 times → `status='failed'`.
+**Triage worker (`server/workers/triage.py`).** Bare `anthropic` SDK; one `messages.create()` per message with a single tool to enforce JSON-schema output. Model `claude-haiku-4-5-20251001`. Falls back to a deterministic stub when `ANTHROPIC_API_KEY` is unset. Output: `TriagedMessage` row + `Bucket(status='open')` upsert + `bucket_open` notify.
 
-#### 2.4 Outbound Dispatcher
-**Not yet built.** Pipeline currently terminates at `ToolCall` rows + inline side-effects for internal tools. The frontend's operator-write endpoints (`/api/alerts`, `/api/requests`, `/api/cases/{id}/messages`) write `ToolCall(approval_status='approved')` + placeholder `OutboundMessage` rows so the audit trail is unified. Real Twilio / WS-push integration is a Plan-5 deliverable.
+**Agent worker (`server/workers/agent.py`).** `claude-agent-sdk` ≥ 0.1.68. One persistent `ClaudeSDKClient` per worker. `setting_sources=[]`, `permission_mode="bypassPermissions"`, `max_turns=8`, `max_budget_usd=0.50`, model `claude-sonnet-4-5` / fallback `claude-opus-4-1`. All 14 matching-engine tools registered as an in-process MCP server via `create_sdk_mcp_server`. Stub mode synthesizes a deterministic decision when no API key is set. Per-decision flow:
 
-#### 2.5 Data Tier
-Postgres ≥ 16 + `pgvector` extension. Geohashes are `TEXT` with prefix `LIKE` queries. Vectors use `Vector(512)` columns; HNSW indices defined in alembic migrations.
+1. Claim a `Bucket` (`FOR UPDATE SKIP LOCKED`).
+2. Acquire `pg_try_advisory_lock(hashtext(alert_id))`.
+3. Publish `agent_thinking` event.
+4. Load context via 8 parallel queries (`asyncio.gather` over triaged messages, recent decisions, sightings, clusters, trajectories, tag assignments, account snapshots, dispatch backlog).
+5. Run multi-turn loop (real or stub).
+6. Persist `AgentDecision` + N `ToolCall` rows; apply execute-mode side-effects inline.
+7. Publish `decision_made` and one `suggestion_pending` per pending tool call.
+8. Mark bucket done; release advisory lock.
 
-### 3. HTTP API surface
+A watchdog wraps the loop catching `ProcessError`/`CLIConnectionError`; on subprocess death, it recreates the client and releases the bucket back. Bucket retries up to 3 times → `status='failed'`.
+
+**Outbound dispatcher.** Not yet built. Pipeline currently terminates at `ToolCall` rows + inline side-effects for internal tools. The frontend's operator-write endpoints (`/api/alerts`, `/api/requests`, `/api/cases/{id}/messages`) write `ToolCall(approval_status='approved')` + placeholder `OutboundMessage` rows so the audit trail is unified. Real Twilio / WS-push integration is the next deliverable.
+
+**Data tier.** Postgres ≥ 16 + `pgvector` extension. Geohashes are `TEXT` with prefix `LIKE` queries. Vectors use `Vector(512)` columns; HNSW indices defined in alembic migrations.
+
+---
+
+## 6. Frontend — NGO console (`web/`)
+
+React + Vite + Tailwind + Zustand + Leaflet. Editorial design system: pure-white surfaces, near-black typography, `///` section markers, mono uppercase metadata, restrained brand-red accents.
+
+### 6.1 Routes
+
+Hand-rolled URL router (`web/src/lib/router.ts`) backed by `history.pushState`:
+
+| Path | View | Purpose |
+|---|---|---|
+| `/` | `DashboardView` | "Where to act first" — region cards ranked by urgency, stats banner, recent-distress wire panel |
+| `/cases` | `CasesView` | three-pane: incident list · chat thread · case profile |
+| `/map` | `MapView` | Leaflet map with severity-coded markers + region panel |
+
+### 6.2 Live state
+
+- **`LiveIndicator`** subscribes to the WebSocket lifecycle and the `lastEventTs` and renders one of: **LIVE** (pulse, fresh event in last 30s), **IDLE · 2m** (connected, quiet), **CONNECTING** (amber pulse), **OFFLINE** (red).
+- **`openStream`** (`web/src/lib/api.ts`) is a self-reconnecting WebSocket wrapper that calls back with both events and connection-state changes.
+- Zustand store holds `incidents`, `messagesByIncident`, `audiences`, `regions`, `me`, `operators`, `selectedIncidentId`, `selectedRegion`, `issueFilter`. Routing state was deliberately moved out of the store and into the URL.
+
+### 6.3 Component system
+
+- **`Select`** — accessible custom dropdown that replaces every native `<select>` (which renders OS-styled and looked broken on macOS dark theme). Used by FilterBar, CaseComposer, SendModal.
+- **`SeverityChip`** — dot + mono uppercase label; no pills.
+- **`OperatorSwitcher`** — initials monogram tile, role + organization affiliation in the trigger, dropdown carries the War Child banner above the switch list.
+- **`MessageBubble`** — real chat: civilian messages on the left with a circular avatar (last 2 phone digits) + bitchat icon badge; operator replies on the right with a dark bubble + AH initials avatar; consecutive messages from the same sender within 2 minutes collapse into a group; timestamp shows only at group boundaries.
+- **`RegionCard`** — indexed `[01]`, `[02]` editorial cards with severity rail; sparkline; theme list; click-through to `/cases` or `/map` with the region pre-selected.
+
+### 6.4 Branding model
+
+The app renders SafeThread (the platform). The operator's NGO is a separate concept surfaced in the `OperatorSwitcher`: a banner inside the dropdown shows the org logo + name; the trigger subtitle includes `SENIOR · [logo] War Child`. War Child is currently a constant in `OperatorSwitcher.tsx` because it's the only tenant; when SafeThread onboards more NGOs it becomes a per-operator field on `me`.
+
+---
+
+## 7. Mobile + mesh
+
+`mobileapp/` is a fork of the open-source **bitchat** iOS app, augmented with SafeThread's store-and-forward layer.
+
+- **Bluetooth-mesh hops.** Civilian phones gossip messages to each other when no carrier is available. The originating phone signs an Ed25519-authenticated DTN bundle.
+- **Carrier-uplink phone.** The first phone in the mesh that has internet POSTs the (still-encrypted) bundle to `/app/dtn/deliver`. The hub never needs a BLE radio for the demo path.
+- **Wire format.** `DTNPackets.swift` (mobile) ↔ `server/dtn/packets.py` (hub). Fixed-binary codecs covering: `Sighting (0x21)`, `Chat (0x22)`, `Amber/Status (0x23)`, `ProfileUpdate (0x24, forward-declared)`, `dtnBundle (0x25)`. Sealed with X25519 + HKDF (`info=b"safethread-dtn-v1"`) + ChaChaPoly.
+- **Hub-side mesh adapter (optional).** `server/transports/{mesh_base,sim_mesh,ble_mesh}.py` provide an `SmsProvider`-shaped abstraction so the hub itself can speak mesh in tests (in-process simulator) or on a Pi with a USB BLE dongle (skeleton; explicit roadmap item).
+
+This entire layer (DTN + mesh transports + tests) lives on the **`matching-engine`** branch as of the latest merge; it has not been merged into `main` yet.
+
+---
+
+## 8. HTTP API surface
 
 All endpoints require `X-Operator-Id: op-senior` (or `op-junior`) header except `/health` and `/api/sim/*`.
 
-#### Read paths (frontend hydration)
+### Read paths (frontend hydration)
 | Method | Path | Returns |
 |---|---|---|
 | GET | `/health` | `{ok: true}` |
@@ -179,16 +282,16 @@ All endpoints require `X-Operator-Id: op-senior` (or `op-junior`) header except 
 | GET | `/api/incidents/{id}/messages` | inbound + outbound (agent-issued + operator-issued) |
 | GET | `/api/dashboard` | aggregate dashboard view |
 
-#### Agent activity (the "alive" surface)
+### Agent activity
 | Method | Path | Returns |
 |---|---|---|
 | GET | `/api/agent/stats` | `{decisionsToday, costTodayUsd, pending, executedToday, lastDecisionAt}` |
-| GET | `/api/decisions/recent?limit=20` | activity tape backfill — recent `AgentDecision` rows with `reasoning_summary`, model, cost, tool-call names, alert |
-| GET | `/api/suggestions` | operator inbox — pending `ToolCall` rows + parent decision summary + alert info |
+| GET | `/api/decisions/recent?limit=20` | activity tape backfill |
+| GET | `/api/suggestions` | operator inbox — pending `ToolCall` rows |
 | POST | `/api/suggestions/{id}/approve` | flip to `approved`; publishes `suggestion_resolved` |
-| POST | `/api/suggestions/{id}/reject` | flip to `rejected`, status=`done`; publishes `suggestion_resolved` |
+| POST | `/api/suggestions/{id}/reject` | flip to `rejected`, status=`done` |
 
-#### Operator writes (case actions)
+### Operator writes
 | Method | Path | Effect |
 |---|---|---|
 | POST | `/api/alerts` | broadcast amber alert; senior-only |
@@ -197,63 +300,72 @@ All endpoints require `X-Operator-Id: op-senior` (or `op-junior`) header except 
 
 All three persist a `ToolCall(decision_id=NULL, decided_by=<op>, approval_status='approved')` + an `OutboundMessage` placeholder, mirroring the agent path.
 
-#### Demo / sim
+### Mobile / DTN ingest *(matching-engine branch — routes are a sibling slice)*
 | Method | Path | Effect |
 |---|---|---|
-| POST | `/api/sim/seed?reset=true` | populate the rich demo scene (8 alerts, 14 historic decisions, 8 pending suggestions, etc.) |
+| POST | `/app/dtn/deliver` | accept opaque DTN bundle bytes; verify Ed25519 sig; resolve sender via `Account.bitchat_pubkey`; call `dispatch_bundle()` |
+
+### Demo / sim
+| Method | Path | Effect |
+|---|---|---|
+| POST | `/api/sim/seed?reset=true` | populate the rich demo scene |
 | POST | `/api/sim/inbound` | inject a single InboundMessage; rides triage + agent |
-| POST | `/api/sim/replay/start?intervalSec=6` | start the live drip — one fresh message every N seconds |
+| POST | `/api/sim/replay/start?intervalSec=6` | start the live drip |
 | POST | `/api/sim/replay/stop` | halt the drip |
 | GET | `/api/sim/replay/status` | running flag + last 10 fired messages |
 
-### 4. WebSocket — `/ws/stream`
+### WebSocket — `/ws/stream`
 
 One persistent connection per dashboard. Forwards 6 event types:
 
 | Type | Payload shape | Triggered by |
 |---|---|---|
 | `message` | `{incident, message}` | inbound message persisted |
-| `incident_upserted` | `{incident}` | alert created/updated; operator wrote a ToolCall |
-| `agent_thinking` | `{bucketKey, alertId, regionPrefix, incident}` | agent claimed a bucket — UI glows the region card |
-| `decision_made` | `{decision: {id, model, summary, totalTurns, latencyMs, costUsd, toolCalls[]}, alertId, regionPrefix, incident}` | `AgentDecision` row persisted — UI prepends to activity tape |
-| `suggestion_pending` | `{suggestion: {id, tool, args, decisionSummary}, incident}` | new `ToolCall(approval_status='pending')` — UI prepends to inbox |
-| `suggestion_resolved` | `{id, approvalStatus}` | operator clicked approve/reject — UI removes from inbox |
+| `incident_upserted` | `{incident}` | alert created/updated |
+| `agent_thinking` | `{bucketKey, alertId, regionPrefix, incident}` | agent claimed a bucket |
+| `decision_made` | `{decision, alertId, regionPrefix, incident}` | `AgentDecision` row persisted |
+| `suggestion_pending` | `{suggestion, incident}` | new `ToolCall(approval_status='pending')` |
+| `suggestion_resolved` | `{id, approvalStatus}` | operator clicked approve/reject |
 
-### 5. Agent tool surface
+---
+
+## 9. Agent tool surface
 
 Two categories. **Action tools** produce side effects, emit `ToolCall` rows, end the multi-turn loop. **Retrieval tools** are read-only and free to call mid-loop within the turn cap.
 
-#### Action tools (12)
-- **Comms:** `send(audience, bodies, mode)`
-- **Case data:** `record_sighting(alert_id, observer_phone, geohash, notes, confidence, photo_urls[])`
-- **Derived knowledge:** `upsert_cluster`, `merge_clusters`, `upsert_trajectory`, `apply_tag`, `remove_tag`, `categorize_alert`
-- **Operator surface:** `escalate_to_ngo`, `mark_bad_actor`, `update_alert_status`
-- **Audit:** `noop(reason)`
+**Action tools (12).**
+- *Comms:* `send(audience, bodies, mode)`
+- *Case data:* `record_sighting(alert_id, observer_phone, geohash, notes, confidence, photo_urls[])`
+- *Derived knowledge:* `upsert_cluster`, `merge_clusters`, `upsert_trajectory`, `apply_tag`, `remove_tag`, `categorize_alert`
+- *Operator surface:* `escalate_to_ngo`, `mark_bad_actor`, `update_alert_status`
+- *Audit:* `noop(reason)`
 
-Default modes: most derived-knowledge tools execute (recoverable). `categorize_alert`, `mark_bad_actor`, `update_alert_status` default to `suggest` (cascades, requires sign-off). `send` defaults vary by audience size — `one` and small `many` execute; `all_alert` / `all_ngo` always suggest.
+Default modes: most derived-knowledge tools execute (recoverable). `categorize_alert`, `mark_bad_actor`, `update_alert_status` default to `suggest`. `send` defaults vary by audience size — `one` and small `many` execute; `all_alert` / `all_ngo` always suggest.
 
-#### Retrieval tools (2)
+**Retrieval tools (2).**
 - `search(entity, query?, filters, sort, top_k=10)` — covers messages, sightings, decisions, clusters, trajectories, tag_assignments. Semantic ranking via pgvector when `query` is set.
 - `get(entity, id)` — PK lookup escape hatch.
 
-### 6. Approval state machine
+**Approval state machine.**
 
 ```
 mode='execute'  →  approval_status='auto_executed'  →  dispatcher claims immediately
 mode='suggest'  →  approval_status='pending'        →  shows in NGO console inbox
                    on operator approve              →  'approved'  →  dispatcher claims
-                   on operator reject               →  'rejected'  →  status='done', audit retained
-                   on auto-expire (default 1h)      →  'expired'   →  no send, audit retained
+                   on operator reject               →  'rejected'  →  status='done'
+                   on auto-expire (default 1h)      →  'expired'   →  no send
 ```
 
-### 7. Data model — 16 tables
+---
+
+## 10. Data model — 16 tables
 
 All carry `ngo_id` FK. ULID PKs unless noted.
 
 | Table | Purpose |
 |---|---|
 | `NGO` | tenant, region, standing orders |
-| `Account` | civilian phone identity, trust score, push token, last-known geohash |
+| `Account` | civilian phone identity, trust score, push token, last-known geohash, **`bitchat_pubkey`** (matching-engine) |
 | `Alert` | active case; carries `category`, `urgency_tier`, `urgency_score`, region |
 | `AlertDelivery` | denormalized roster of who received which alert |
 | `InboundMessage` | raw inbound (queue: `new`/`triaging`/`triaged`/`failed`) |
@@ -268,92 +380,87 @@ All carry `ngo_id` FK. ULID PKs unless noted.
 | `Trajectory` | inferred path with `points`, direction, speed |
 | `Tag` | namespaced free-form taxonomy |
 | `TagAssignment` | idempotent (`UNIQUE(tag_id, entity_type, entity_id)`) |
+| `dtn_seen_bundle` *(matching-engine)* | DTN idempotency cache |
 
-**Bucket key:** `{alert_id}|{geohash_prefix_4}|{window_iso}`. Default 3000ms window (per `Bucket.window_length_ms`). Heartbeat buckets use `heartbeat:{alert_id}:{ts}`.
+**Bucket key:** `{alert_id}|{geohash_prefix_4}|{window_iso}`. Default 3000ms window. Heartbeat buckets use `heartbeat:{alert_id}:{ts}`.
 
 **Idempotency key:** `sha256(bucket_key || tool_name || canonical_json(args))` on every `ToolCall`. Replay-safe by construction.
 
-### 8. Tech stack
+---
 
-- **Python 3.12+**, FastAPI 0.110+, uvicorn
-- **SQLAlchemy 2.0 async** + asyncpg
-- **alembic** for migrations
-- **pgvector** Python package + `pgvector/pgvector:pg16` Docker image
-- **pydantic-settings** for config, **python-ulid** for PKs
-- **anthropic** (bare client) for triage
-- **claude-agent-sdk** ≥ 0.1.68 for the agent worker (requires Claude Code CLI on PATH for real mode)
-- **pytest + pytest-asyncio + httpx** for tests; **ruff** for lint
-- **uv** for package management
+## 11. Tech stack
 
-Frontend: React + Vite + Tailwind + Zustand + Leaflet (in `web/`).
+**Backend.** Python 3.12+, FastAPI 0.110+, uvicorn, SQLAlchemy 2.0 async + asyncpg, alembic, pgvector, pydantic-settings, python-ulid, anthropic (bare client) for triage, claude-agent-sdk ≥ 0.1.68 for the agent worker (requires Claude Code CLI on PATH for real mode), pytest + pytest-asyncio + httpx, ruff, uv.
 
-### 9. Build status
+**DTN / mesh** *(matching-engine)*. cryptography (X25519 + HKDF + ChaCha20-Poly1305), bleak (BLE skeleton — never imported on the hot path).
+
+**Frontend.** React 18, Vite, Tailwind v3, Zustand, Leaflet, clsx. Inter Tight + Inter + JetBrains Mono. Self-contained URL router (no react-router), self-contained `Select` component (no headlessui/radix).
+
+**Mobile.** Swift 5, bitchat fork with SafeThread store-and-forward layer.
+
+---
+
+## 12. Build status
 
 | Plan | Scope | Status |
 |---|---|---|
-| 1 — Foundation | Postgres + pgvector compose, FastAPI skeleton, all 16 SQLAlchemy models + alembic revisions, EventBus & SmsProvider Protocols + first impls, NGO operator JWT auth | **shipped** |
-| 2 — Inbound pipeline | API tier ingress, channel adapters, triage worker, registry, /api/me, /api/audiences, /api/regions/*, /api/incidents/*, /api/dashboard, /api/sim/{seed,inbound}, WS /ws/stream, e2e | **shipped** |
-| 3 — Agent worker | claude-agent-sdk integration, 14-tool surface, idempotency + audit, per-alert advisory lock, multi-turn loop with retrieval, stub mode for tests | **shipped** (real-LLM path validated against Sonnet 4.5) |
-| 3.5 — Operator endpoints | POST /api/alerts, /api/requests, /api/cases/{id}/messages writing unified ToolCall + OutboundMessage rows | **shipped** |
-| 3.6 — Liveness | /api/suggestions inbox, /api/decisions/recent, /api/agent/stats, 4 new WS event types, agent-worker publish hooks | **shipped** |
-| 3.7 — Demo aliveness | Rich multi-region seeder (8 alerts, ~30 decisions, 8 pending), live replay drip, heartbeat scheduler | **shipped** |
-| 4 — Outbound dispatcher | Real Twilio + WS push, channel cascade, audience resolution, rate-limited token buckets, OutboundMessage delivery lifecycle | not yet started |
-| 5 — Frontend liveness UI | Header pill, activity tape, approvals inbox, region-glow on `agent_thinking` | in flight (frontend) |
-| 6 — Bitchat BLE transport | Last-mile mesh adapter | stretch goal |
+| 1 — Foundation | Postgres + pgvector compose, FastAPI skeleton, all 16 SQLAlchemy models + alembic, EventBus & SmsProvider Protocols, JWT auth scaffold | shipped |
+| 2 — Inbound pipeline | API ingress, channel adapters, triage worker, registry, frontend hydration endpoints, WS, e2e | shipped |
+| 3 — Agent worker | claude-agent-sdk integration, 14-tool surface, idempotency + audit, per-alert advisory lock, multi-turn loop with retrieval, stub mode | shipped (real-LLM path validated against Sonnet 4.5) |
+| 3.5 — Operator endpoints | unified ToolCall + OutboundMessage on operator writes | shipped |
+| 3.6 — Liveness | `/api/suggestions` inbox, `/api/decisions/recent`, `/api/agent/stats`, 4 new WS event types | shipped |
+| 3.7 — Demo aliveness | rich seeder, replay drip, heartbeat scheduler | shipped |
+| 4 — DTN ingest library | wire-format codecs, sealed-box crypto, dispatcher, idempotency, account `bitchat_pubkey` | shipped on `matching-engine` |
+| 4.1 — Mesh transport adapters | `SmsProvider`-shaped mesh interface, sim transport, BLE skeleton | shipped on `matching-engine` |
+| 5 — Frontend rebuild | SafeThread rebrand, editorial design system, URL routing, smart `LiveIndicator`, custom `Select`, real chat layout, operator/org model | shipped |
+| 6 — Outbound dispatcher | real Twilio + WS push, channel cascade, audience resolution, rate-limited token buckets | not yet started |
+| 7 — Bitchat BLE on hub | bleak-backed BLE radio, real GATT service binding | stretch goal |
 
-### 10. Tests
+---
+
+## 13. Tests
 
 ```bash
-uv run pytest               # 98 passing as of last commit
+uv run pytest               # 98 passing on main; +29 DTN tests on matching-engine
 uv run pytest -k agent      # agent-worker focused
-uv run pytest -k suggestions  # liveness endpoints
+uv run pytest -k dtn        # DTN library (matching-engine)
+uv run pytest -k transport  # mesh adapters (matching-engine)
 ```
-
-Test files (one per domain):
-
-| File | Coverage |
-|---|---|
-| `test_models_*` | every SQLAlchemy model |
-| `test_db_engine.py` | pgvector loaded, test DB isolation |
-| `test_eventbus_postgres.py` | LISTEN/NOTIFY round-trip |
-| `test_sim_sms.py` | sim transport |
-| `test_registry_and_auth.py` | static registry + `current_operator` dep |
-| `test_api_*` | every REST endpoint |
-| `test_triage_worker.py` | classify → triaged + bucket |
-| `test_agent_worker.py` | stub mode → AgentDecision + ToolCall + side-effects |
-| `test_api_suggestions_and_feed.py` | inbox + activity feed contract |
-| `test_sim_replay.py`, `test_heartbeat.py` | aliveness backends |
-| `test_e2e_foundation.py`, `test_e2e_inbound_pipeline.py` | full pipeline: POST /sim/inbound → triage → bucket → agent decision |
-| `test_worker_lifecycle.py` | both workers stay alive across requests |
 
 For the real-LLM path: `scripts/smoke_real_agent.py` does a one-shot end-to-end test with a real `ANTHROPIC_API_KEY`. Validates SDK connect, multi-turn loop, tool dispatch, persistence. Costs ~$0.06 per run.
 
-### 11. Operating envelope (validated against the spec, not yet measured)
+---
+
+## 14. Operating envelope
 
 Target spike: **1M messages over 5 minutes**.
 
 | Stage | Volume | Mechanism | Outcome |
 |---|---|---|---|
-| API Tier | 3,300 INSERTs/s | stateless, async, multi-instance | sustained with 3-4 pods |
+| API tier | 3,300 INSERTs/s | stateless, async, multi-instance | sustained with 3-4 pods |
+| DTN dispatcher | 100s of bundles/s | tolerant decode, idempotency cache, FK-strict writes | bounded by Account lookups |
 | Triage | 1M Haiku calls | ~30 concurrent | drains in ~5 min, ~$100 |
 | Bucketing | 1M → ~150-200 buckets | adaptive window + region prefix | coalescing factor ~5,000:1 |
-| Agent | ~150 Sonnet calls | 5 alerts × 6 decisions/min/alert (per-alert lock) | ~150 decisions in 5 min, ~$22 |
-| Dispatch | ~750k sends | push (free) for 80%, SMS (rate-limited) for 20% | ~$3,750, dominated by SMS |
+| Agent | ~150 Sonnet calls | per-alert advisory lock | ~$22 in 5 min |
+| Dispatch | ~750k sends | push (free) for 80%, SMS for 20% | ~$3,750, dominated by SMS |
 
-### 12. Pointers
+---
+
+## 15. Pointers
 
 - **Spec:** `docs/superpowers/specs/2026-04-25-matching-engine-design.md` — full architecture and every contract.
-- **Plans:** `docs/superpowers/plans/2026-04-25-foundation.md`, `2026-04-25-inbound-pipeline.md`.
+- **Plans:** `docs/superpowers/plans/`
 - **Smoke script:** `scripts/smoke_real_agent.py` — one-shot real-LLM validation.
-- **Mobile slice:** `mobileapp/` — SafeThread iOS (Bitchat-derived) — UI shell, store-and-forward layer.
+- **DTN wire format:** `mobileapp/.../DTNPackets.swift` ↔ `server/dtn/packets.py` (must stay in sync).
+- **Branches:** `main` (matching engine + console); `matching-engine` (adds DTN library + mesh transport adapters, will fold into `main`).
 
 ---
 
 ## Conventions
 
 - **Skills-driven workflow.** Plans are written for the `superpowers:executing-plans` and `superpowers:subagent-driven-development` skills.
-- **TDD where it matters.** Every domain has tests; protocol-shaped contracts (EventBus, SmsProvider, etc.) ship with their first concrete implementation.
+- **TDD where it matters.** Every domain has tests; protocol-shaped contracts ship with their first concrete implementation.
 - **No half-steps.** Postgres + pgvector + advisory locks + `LISTEN/NOTIFY` from day one.
-- **Multi-tenant schema, single-tenant runtime.** `ngo_id` everywhere; one NGO live in the demo.
+- **Multi-tenant schema, single-tenant runtime.** `ngo_id` everywhere; War Child is the launch tenant.
 - **Audit by construction.** `AgentDecision.turns JSON` carries the full multi-turn conversation; idempotency keys at every queue boundary; `ToolCall.revised_from_call_id` traces operator edits.
 - **Graceful LLM degradation.** Triage and agent both fall back to deterministic stubs when `ANTHROPIC_API_KEY` is unset, so tests and offline demos always run.

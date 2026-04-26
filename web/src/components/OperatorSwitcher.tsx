@@ -90,15 +90,37 @@ export function OperatorSwitcher() {
       {open && (
         <div className="absolute right-0 mt-2 w-[320px] bg-white border border-surface-300 rounded-lg shadow-modal z-[1000] overflow-hidden">
           {/* Org banner */}
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-surface-300 bg-surface-100/60">
+          <div className="flex items-start gap-3 px-4 py-3 border-b border-surface-300 bg-surface-100/60">
             <img
               src={ORG.logo}
               alt=""
-              className="w-8 h-8 rounded-sm object-cover shrink-0"
+              className="w-8 h-8 rounded-sm object-cover shrink-0 mt-0.5"
             />
-            <div className="min-w-0">
-              <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-500">
-                /// Organization
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-3">
+                <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-500">
+                  /// Organization
+                </div>
+                <button
+                  type="button"
+                  className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-500 hover:text-brand-600 transition inline-flex items-center gap-1 shrink-0"
+                  aria-label="Log out"
+                >
+                  <svg
+                    className="w-3 h-3"
+                    viewBox="0 0 12 12"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M5 2H2.5v8H5" />
+                    <path d="M7.5 4l2 2-2 2" />
+                    <path d="M9.5 6h-5" />
+                  </svg>
+                  Logout
+                </button>
               </div>
               <div className="font-display text-[14px] font-semibold text-ink-900 tracking-tight truncate">
                 {ORG.name}
