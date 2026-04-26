@@ -69,6 +69,33 @@ def max_recipients() -> int:
         return 25
 
 
+def rescue_team() -> list[tuple[str, Optional[str]]]:
+    """Parse RESCUE_TEAM_RECIPIENTS into [(phone_e164, name_or_None), ...].
+
+    Format: '+316...:Alice,+447...:Bob'. Whitespace within phones is
+    stripped so user-friendly inputs like '+44 7786 256893' work.
+    Names are optional ('+316...' alone is fine).
+    """
+    raw = _env("RESCUE_TEAM_RECIPIENTS")
+    if not raw:
+        return []
+    out: list[tuple[str, Optional[str]]] = []
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if ":" in part:
+            phone, name = part.split(":", 1)
+            phone = phone.strip().replace(" ", "")
+            name = name.strip() or None
+        else:
+            phone = part.replace(" ", "")
+            name = None
+        if phone:
+            out.append((phone, name))
+    return out
+
+
 def _client():
     from twilio.rest import Client
 

@@ -73,6 +73,17 @@ AUDIENCES: list[dict[str, Any]] = [
         "roles": ["senior", "junior"],
         "channelsAvailable": ["app", "sms", "fallback"],
     },
+    {
+        "id": "rescue_team",
+        "label": "Rescue team",
+        "description": "Explicit on-call list configured via RESCUE_TEAM_RECIPIENTS. Bypasses demo recipient — every member receives the SMS.",
+        # count is overridden at runtime in /api/audiences from the env
+        # var, so the card always reflects the current list size.
+        "count": 0,
+        "regions": _REGION_KEYS,
+        "roles": ["senior", "junior"],
+        "channelsAvailable": ["sms"],
+    },
 ]
 
 _OPERATOR_INDEX: dict[str, dict[str, Any]] = {op["id"]: op for op in OPERATORS}

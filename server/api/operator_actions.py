@@ -88,6 +88,14 @@ async def _resolve_recipients(
     ngo_id: str,
 ) -> list[str]:
     """Pick the phones we'd actually SMS for this audience + region."""
+    aud_id = audience.get("id")
+
+    # Rescue team has its own explicit, env-configured list of verified
+    # numbers. Skip the demo-recipient override — every member should
+    # genuinely receive the broadcast.
+    if aud_id == "rescue_team":
+        return [phone for phone, _name in twilio_sms.rescue_team()]
+
     # Demo override: trial Twilio accounts can only message verified numbers.
     demo = twilio_sms.demo_recipient()
     if demo:
@@ -98,7 +106,6 @@ async def _resolve_recipients(
         Account.opted_out.is_(False),
     )
 
-    aud_id = audience.get("id")
     if aud_id == "baghdad_residents":
         prefix = REGIONS["IRQ_BAGHDAD"]["geohash_prefix"]
         stmt = stmt.where(Account.home_geohash.like(f"{prefix}%"))
