@@ -12,6 +12,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from server.api.agent_feed import router as agent_feed_router
 from server.api.audiences import router as audiences_router
+from server.api.auth import router as auth_router
 from server.api.civilian import router as civilian_router
 from server.api.dashboard import router as dashboard_router
 from server.api.health import router as health_router
@@ -130,6 +131,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="anth-hackathon26 matching engine", lifespan=lifespan)
 app.include_router(health_router)
+app.include_router(auth_router)
 app.include_router(operators_router)
 app.include_router(audiences_router)
 app.include_router(regions_router)

@@ -90,6 +90,50 @@ ngrok http 8080
 #   https://<your-tunnel>.ngrok.io/webhooks/twilio/sms
 ```
 
+### Deploying for an NGO (boxd.sh)
+
+We ship to **[boxd.sh](https://boxd.sh)** — a one-command VM platform with a built-in TLS-terminating subdomain proxy. An NGO can be live in under 10 minutes with no infra knowledge.
+
+```bash
+# 1. From your laptop — provision a VM with a memorable name.
+ssh boxd.sh
+boxd create safethread        # creates safethread.boxd.sh with TLS
+
+# 2. Open a shell on the VM.
+boxd connect safethread
+
+# 3. Clone + create .env (all secrets stay on the VM, never committed).
+git clone https://github.com/<your-fork>/anth-hackathon26.git
+cd anth-hackathon26
+cat > .env <<'EOF'
+ANTHROPIC_API_KEY=sk-ant-...                 # required for real-LLM mode
+APP_PASSWORD=changeme                        # shared operator login
+SEED_ON_BOOT=false                           # NGO deploy = clean DB
+REPLAY_AUTOSTART=false                       # no demo drip in production
+TWILIO_ACCOUNT_SID=AC...
+TWILIO_AUTH_TOKEN=...
+TWILIO_FROM_NUMBER=+1...                     # buy a number in the Twilio console
+TWILIO_DEMO_RECIPIENT=+316...                # optional: pin every send to one phone
+TWILIO_MAX_RECIPIENTS=25
+RESCUE_TEAM_RECIPIENTS="+316...:Alice,+44...:Bob"   # quote if any name has spaces
+EOF
+
+# 4. Boot.
+docker compose up -d --build
+```
+
+The console is now live at **`https://safethread.boxd.sh`** with TLS, the login screen, and an empty database ready for real traffic.
+
+**Wire Twilio so SMS replies land on the deploy:**
+1. Twilio console → Phone Numbers → Active Numbers → click your number.
+2. Messaging Configuration → "A message comes in" → **Webhook** → `https://safethread.boxd.sh/webhooks/twilio/sms` → **HTTP POST** → save.
+
+**Updating after a code change**:
+```bash
+git pull && docker compose up -d --build
+```
+The Postgres volume persists across rebuilds (`pgdata`), so cases, accounts, and history survive. To wipe and start clean: `docker compose down -v`.
+
 ---
 
 ## Repo layout (top level)
@@ -130,13 +174,14 @@ All settable via `.env` or the host shell.
 | `DATABASE_URL` | `postgresql+asyncpg://app:app@db:5432/matching` | Postgres URL |
 | `ANTHROPIC_API_KEY` | — | enables real Haiku triage + Opus 4.7 agent. Without it, both fall back to deterministic stubs. |
 | `JWT_SECRET` | `change-me` | NGO operator JWT signing |
+| `APP_PASSWORD` | — | shared password the operator console asks for on first load. Empty = no gate. |
 | `HEARTBEAT_INTERVAL_SEC` | `300` | how often the heartbeat scheduler ticks each active alert |
 | `HEARTBEAT_ENABLED` | `true` | `false` to skip the heartbeat task entirely |
 | `SEED_ON_BOOT` | `true` (compose) | run the demo seeder if the DB is empty |
 | `REPLAY_AUTOSTART` | `true` (compose) | start the live drip a few seconds after boot |
 | `REPLAY_INTERVAL_SEC` | `4` | drip cadence; lower = busier dashboard |
 | `TWILIO_*` | — | live SMS; see [Inbound SMS via Twilio](#inbound-sms-via-twilio) |
-| `RESCUE_TEAM_RECIPIENTS` | — | comma-separated `+phone:Name` list for the rescue-team audience |
+| `RESCUE_TEAM_RECIPIENTS` | — | comma-separated `+phone:Name` list for the rescue-team audience. Quote the value if any name has a space. |
 
 ---
 
