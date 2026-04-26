@@ -152,14 +152,22 @@ export interface DashboardRegion {
   }[];
 }
 
+export interface TriageInfo {
+  classification: string;
+  confidence: number | null;
+  geohash6: string | null;
+  language: string | null;
+}
+
 export interface RecentDistressItem {
   messageId: string;
-  incidentId: string;
-  region: Region;
+  incidentId: string | null;
+  region: Region | null;
   regionLabel: string;
   from: string;
   body: string;
   ts: string;
+  triage?: TriageInfo | null;
 }
 
 export interface Dashboard {

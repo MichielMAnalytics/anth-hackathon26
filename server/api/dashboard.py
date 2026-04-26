@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from server.api.auth_dep import current_operator
 from server.api.registry import REGIONS
 from server.db.alerts import Alert
-from server.db.messages import InboundMessage
+from server.db.messages import InboundMessage, TriagedMessage
 from server.db.session import get_db
 
 router = APIRouter(prefix="/api")
@@ -54,10 +54,14 @@ async def dashboard(
     alerts = (await db.execute(select(Alert).where(Alert.status == "active"))).scalars().all()
     alert_map: dict[str, Alert] = {a.alert_id: a for a in alerts}
 
+    # Civilian app messages arrive orphan (no alert reference) by design —
+    # a "case" is only created when an operator explicitly clicks Create
+    # case. We still want these messages to appear on the Messages tab's
+    # live wire and survive tab switches, so include them here. Region
+    # stats below skip orphans naturally (they aren't tied to a region).
     msgs_in_window = (
         await db.execute(
             select(InboundMessage)
-            .where(InboundMessage.in_reply_to_alert_id.isnot(None))
             .where(InboundMessage.received_at >= window_start)
             .order_by(InboundMessage.received_at.desc())
         )
@@ -135,9 +139,35 @@ async def dashboard(
             "cases": cases,
         })
 
+    # Pull triage data for the visible slice so the wire can show the
+    # cheap-LLM classification ("sighting" / "noise" / etc.) and let the
+    # operator click "Make a case" on flagged messages.
+    visible = msgs_in_window[:10]
+    visible_ids = [m.msg_id for m in visible]
+    triage_by_id: dict[str, TriagedMessage] = {}
+    if visible_ids:
+        triage_rows = (
+            await db.execute(
+                select(TriagedMessage).where(TriagedMessage.msg_id.in_(visible_ids))
+            )
+        ).scalars().all()
+        triage_by_id = {t.msg_id: t for t in triage_rows}
+
+    def _triage_payload(msg_id: str) -> dict[str, Any]:
+        t = triage_by_id.get(msg_id)
+        if t is None:
+            return {}
+        return {
+            "classification": t.classification,
+            "confidence": float(t.confidence) if t.confidence is not None else None,
+            "geohash6": t.geohash6,
+            "language": t.language,
+        }
+
     recent_distress = []
-    for msg in msgs_in_window[:10]:
+    for msg in visible:
         if msg.in_reply_to_alert_id and msg.in_reply_to_alert_id in alert_map:
+            # Tied to an operator-issued case.
             alert = alert_map[msg.in_reply_to_alert_id]
             region_key = _region_for_prefix(alert.region_geohash_prefix)
             meta = REGIONS[region_key]
@@ -149,6 +179,19 @@ async def dashboard(
                 "from": msg.sender_phone,
                 "body": msg.body,
                 "ts": msg.received_at.isoformat(),
+                "triage": _triage_payload(msg.msg_id),
+            })
+        else:
+            # Free-form civilian inbound — appears on the wire, isn't a case.
+            recent_distress.append({
+                "messageId": msg.msg_id,
+                "incidentId": None,
+                "region": None,
+                "regionLabel": "—",
+                "from": msg.sender_phone,
+                "body": msg.body,
+                "ts": msg.received_at.isoformat(),
+                "triage": _triage_payload(msg.msg_id),
             })
 
     return {

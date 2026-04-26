@@ -1,10 +1,11 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from server.db.base import Base, CreatedAt, ULIDPK, UpdatedAt
+from server.db.base import Base, CreatedAt, ULIDPK, UpdatedAt, generate_ulid
 
 
 class NGO(Base):
@@ -37,3 +38,34 @@ class Account(Base):
     source: Mapped[str] = mapped_column(String(16), default="app", nullable=False)
     created_at: Mapped[CreatedAt]
     updated_at: Mapped[UpdatedAt]
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+DEFAULT_NGO_NAME = "Local Demo NGO"
+
+
+async def get_or_create_default_ngo(db: AsyncSession) -> "NGO":
+    """Return the single configured NGO; create a default one if missing.
+
+    Used by both the operator-side `POST /api/incidents` and the
+    civilian-side `POST /v1/register` so a fresh-volume DB always has
+    somewhere to attach. Multi-NGO deployments (>1 NGO row) are still
+    rejected at the call site since we have no routing key.
+    """
+    rows = (await db.execute(select(NGO))).scalars().all()
+    if len(rows) == 1:
+        return rows[0]
+    if len(rows) > 1:
+        raise RuntimeError(f"Expected at most 1 NGO, found {len(rows)}.")
+    ngo = NGO(
+        ngo_id=generate_ulid(),
+        name=DEFAULT_NGO_NAME,
+        region_geohash_prefix="sv",
+    )
+    db.add(ngo)
+    await db.flush()
+    return ngo
