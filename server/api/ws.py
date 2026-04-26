@@ -16,14 +16,16 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-def _incident_shape(alert: Optional[Alert]) -> dict:
+def _incident_shape(alert: Optional[Alert]) -> Optional[dict]:
     """Camel-case Incident shape, matching GET /api/incidents.
 
-    A None alert returns an empty dict so the frontend can ignore it
-    rather than upsert a placeholder with id=undefined.
+    Returns None when the alert is missing — frontend should guard with
+    `ev.incident?.id` before upserting, otherwise an entry with key
+    'undefined' lands in the store and downstream effects spam
+    /api/incidents/undefined/messages.
     """
     if alert is None:
-        return {}
+        return None
     return alert_to_incident_shape(alert)
 
 
