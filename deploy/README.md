@@ -25,7 +25,8 @@ Now you're on the VM:
 git clone https://github.com/MichielMAnalytics/anth-hackathon26.git
 cd anth-hackathon26
 
-# 5. Drop your Anthropic key into a .env file (gitignored)
+# 5. Set the Anthropic key — see "Set the Anthropic secret" below.
+#    Quickest path:
 echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
 
 # 6. Build + start the two containers (db + app)
@@ -44,6 +45,91 @@ curl -X POST "http://localhost:8080/api/sim/replay/start?intervalSec=4"
 The app is reachable at `http://localhost:8080` on the VM and at
 `https://<vm-name>.boxd.sh` once boxd's subdomain proxy is pointed at
 port 8080 (boxd does this automatically for the default port).
+
+## Set the Anthropic secret
+
+The agent worker reads `ANTHROPIC_API_KEY` from its container environment.
+With it set, the triage worker uses Haiku and the agent uses Sonnet 4.5.
+Without it, both fall back to deterministic stubs — the demo still runs,
+but `decision.model == "stub"` and `cost_usd == 0`.
+
+`docker-compose.yml` already declares the pass-through:
+
+```yaml
+environment:
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+```
+
+So the container sees whatever the **host shell** sees when you run
+`docker compose up`. Three ways to set it on the VM:
+
+### Option A — `.env` file (recommended)
+
+Create a `.env` file at the repo root on the VM. Docker Compose reads it
+automatically before substitution.
+
+```bash
+cd anth-hackathon26
+cat > .env <<'EOF'
+ANTHROPIC_API_KEY=sk-ant-...your-key-here...
+EOF
+chmod 600 .env             # readable only by you
+
+docker compose up -d --build
+```
+
+`.env` is in the repo's `.gitignore`, so it won't accidentally get
+committed if someone runs `git add -A` on the VM.
+
+### Option B — export in the shell session
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+docker compose up -d --build
+```
+
+The downside: it dies when you log out, so a `docker compose restart` in
+a fresh shell will lose the secret. Fine for one-shot tests, not for a
+long-running deploy.
+
+### Option C — inline on the command line
+
+```bash
+ANTHROPIC_API_KEY="sk-ant-..." docker compose up -d --build
+```
+
+Same caveat as Option B, plus the key may end up in your shell history.
+
+### Verify it's in the container
+
+```bash
+# 1. Container env should show the key (masked here for safety):
+docker compose exec app sh -c 'echo $ANTHROPIC_API_KEY' | head -c 20
+echo
+
+# 2. Trigger one decision and confirm it ran in real mode:
+curl -X POST http://localhost:8080/api/sim/replay/start?intervalSec=4
+sleep 8
+curl -X POST http://localhost:8080/api/sim/replay/stop
+curl -s http://localhost:8080/api/decisions/recent?limit=1 \
+  -H "X-Operator-Id: op-senior" | python3 -m json.tool | head -20
+```
+
+If `model` reads `claude-sonnet-4-5` and `costUsd > 0`, you're real-mode.
+If it reads `stub` and `costUsd == 0`, the key didn't reach the container.
+
+### Where to get the key
+
+[console.anthropic.com → Settings → API keys](https://console.anthropic.com/settings/keys).
+Create a key, copy it once (the console won't show it again), drop it
+into `.env`. Rotate after the demo.
+
+### Security checklist
+
+- `.env` lives only on the VM, never in git.
+- The key never appears in commits, logs, or the README — verify with
+  `git log -p --all -S "sk-ant-"` before pushing.
+- Don't echo the key over a shared screen-share without masking.
 
 ## Re-deploy after a code change
 
