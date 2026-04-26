@@ -3,6 +3,7 @@ import clsx from "clsx";
 import { sendCaseMessage } from "../lib/api";
 import { useStore } from "../lib/store";
 import type { Channel, Incident } from "../lib/types";
+import { Select } from "./Select";
 
 interface Props {
   incident: Incident;
@@ -25,7 +26,6 @@ export function CaseComposer({ incident }: Props) {
     return audiences
       .filter((a) => a.regions.includes(incident.region))
       .sort((a, b) => {
-        // for missing-person → civilians first; for medical → doctors first
         const score = (role: string) => {
           if (incident.category === "missing_person")
             return role === "civilian" ? 0 : 1;
@@ -39,7 +39,6 @@ export function CaseComposer({ incident }: Props) {
       });
   }, [audiences, incident.region, incident.category]);
 
-  // default audience to first relevant on first render or incident change
   if (audienceId === "" && relevant.length > 0) {
     setAudienceId(relevant[0].id);
   }
@@ -59,56 +58,63 @@ export function CaseComposer({ incident }: Props) {
     }
   }
 
-  return (
-    <div className="border-t border-surface-300 bg-surface-50 px-6 py-3 space-y-2.5">
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-meta uppercase tracking-wider text-ink-500">
-          Send to
-        </span>
-        <select
-          value={audienceId}
-          onChange={(e) => setAudienceId(e.target.value)}
-          className="bg-surface-50 border border-surface-300 rounded-md px-2 py-1 text-sm text-ink-900 focus:outline-none focus:border-brand-600"
-        >
-          {relevant.length === 0 && (
-            <option value="">— no audience available —</option>
-          )}
-          {relevant.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.label} · {a.count.toLocaleString()} reachable
-            </option>
-          ))}
-        </select>
+  const canSend = !sending && !!body.trim();
 
-        <span className="text-meta uppercase tracking-wider text-ink-500 ml-2">
-          Via
-        </span>
-        <div className="flex rounded-md overflow-hidden border border-surface-300">
-          {(["fallback", "app", "sms"] as Channel[]).map((c) => {
-            const active = via === c;
-            return (
-              <button
-                key={c}
-                onClick={() => setVia(c)}
-                className={clsx(
-                  "px-3 min-h-[40px] text-xs font-medium transition border-r border-surface-300 last:border-r-0 flex items-center",
-                  active
-                    ? "bg-brand-600 text-white"
-                    : "bg-surface-50 text-ink-700 hover:bg-surface-100",
-                )}
-              >
-                {CHANNEL_LABEL[c]}
-              </button>
-            );
-          })}
+  return (
+    <div className="border-t border-surface-300 bg-white px-6 py-4 space-y-3">
+      <div className="flex items-center gap-x-5 gap-y-2 flex-wrap">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-500 shrink-0">
+            /// Send to
+          </span>
+          {relevant.length === 0 ? (
+            <span className="text-[12.5px] text-ink-400">
+              — no audience available —
+            </span>
+          ) : (
+            <Select<string>
+              value={audienceId}
+              onChange={(v) => setAudienceId(v)}
+              options={relevant.map((a) => ({
+                value: a.id,
+                label: `${a.label} · ${a.count.toLocaleString()} reachable`,
+              }))}
+              ariaLabel="Send to audience"
+            />
+          )}
         </div>
 
-        <span className="ml-auto text-meta text-ink-500 hidden md:inline">
+        <div className="flex items-center gap-2.5">
+          <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-500">
+            /// Via
+          </span>
+          <div className="flex items-center border border-surface-300 rounded-sm overflow-hidden">
+            {(["fallback", "app", "sms"] as Channel[]).map((c) => {
+              const active = via === c;
+              return (
+                <button
+                  key={c}
+                  onClick={() => setVia(c)}
+                  className={clsx(
+                    "px-3 py-1.5 text-[11.5px] font-medium transition border-r border-surface-300 last:border-r-0",
+                    active
+                      ? "bg-ink-900 text-white"
+                      : "bg-white text-ink-600 hover:text-ink-900 hover:bg-surface-100",
+                  )}
+                >
+                  {CHANNEL_LABEL[c]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <span className="ml-auto font-mono text-[10px] uppercase tracking-[0.14em] text-ink-400 hidden md:inline">
           ⌘↵ to send
         </span>
       </div>
 
-      <div className="flex items-end gap-2">
+      <div className="flex items-stretch gap-2">
         <textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
@@ -121,12 +127,17 @@ export function CaseComposer({ incident }: Props) {
                 ? "Reply — e.g. 'Doctors near Sana'a, can anyone deliver insulin tonight?'"
                 : "Reply on this case…"
           }
-          className="flex-1 resize-y bg-white border border-surface-300 rounded-md px-3 py-2 text-sm text-ink-900 leading-relaxed focus:outline-none focus:border-brand-600 focus:ring-1 focus:ring-brand-600/20 md:min-h-[64px]"
+          className="flex-1 resize-y bg-white border border-surface-300 rounded-sm px-3 py-2.5 text-[13px] text-ink-900 leading-relaxed placeholder:text-ink-400 focus:outline-none focus:border-ink-700 transition md:min-h-[64px]"
         />
         <button
           onClick={send}
-          disabled={sending || !body.trim()}
-          className="px-4 min-h-[40px] md:min-h-[44px] bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-md disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+          disabled={!canSend}
+          className={clsx(
+            "px-5 self-end py-2.5 font-mono text-[11px] uppercase tracking-[0.14em] font-semibold rounded-sm transition shrink-0",
+            canSend
+              ? "bg-brand-600 hover:bg-brand-700 text-white"
+              : "bg-surface-200 text-ink-400 cursor-not-allowed",
+          )}
         >
           {sending ? "Sending…" : "Send"}
         </button>

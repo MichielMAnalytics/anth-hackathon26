@@ -4,33 +4,33 @@ export default {
   theme: {
     extend: {
       colors: {
-        // surface / neutral system: white surfaces, deep navy text
+        // Clean cool-gray surface system. Pure white cards on near-white app bg.
         surface: {
           DEFAULT: "#ffffff",
           50: "#ffffff",
-          100: "#f8fafc",
-          200: "#eef2f6",
-          300: "#e2e8f0",
-          400: "#cbd5e1",
-          500: "#94a3b8",
-          600: "#64748b",
-          700: "#475569",
-          800: "#334155",
-          900: "#1e293b",
+          100: "#fafafa", // app background
+          200: "#f4f4f5", // subtle fills
+          300: "#e8e8eb", // hairline borders
+          400: "#c8c8cc",
+          500: "#9a9a9f",
+          600: "#6e6e74",
+          700: "#46464b",
+          800: "#272729",
+          900: "#171718",
         },
         ink: {
-          DEFAULT: "#0f172a",
-          50: "#f8fafc",
-          100: "#f1f5f9",
-          400: "#94a3b8",
-          500: "#64748b",
-          600: "#475569",
-          700: "#334155",
-          800: "#1e293b",
-          900: "#0f172a",
-          950: "#0a0f1d",
+          DEFAULT: "#0a0a0b",
+          50: "#fafafa",
+          100: "#f4f4f5",
+          400: "#a1a1a6",
+          500: "#73737a",
+          600: "#52525a",
+          700: "#3a3a40",
+          800: "#1d1d20",
+          900: "#0a0a0b",
+          950: "#050506",
         },
-        // War Child red — primary brand
+        // War Child red — primary brand (preserved)
         brand: {
           50: "#fff1f1",
           100: "#ffdfdf",
@@ -38,39 +38,57 @@ export default {
           300: "#ff9b9b",
           400: "#fa6464",
           500: "#ee3535",
-          600: "#e62e2e", // primary
+          600: "#e62e2e",
           700: "#c11f1f",
           800: "#9d1d1d",
           900: "#811d1d",
         },
-        // severity — calmer than v1 dark theme; reads as informational
+        // Severity — flat, restrained.
         sev: {
-          critical: "#c11f1f", // brand-700, but only on chips not full surfaces
-          high: "#b07636",     // burnt amber
-          medium: "#a17e2e",   // ochre
-          low: "#3f7d4f",      // forest green
+          critical: "#dc2626", // red-600 — only on chips, never as backgrounds
+          high: "#b45309", // amber-700
+          medium: "#a16207", // yellow-700
+          low: "#16a34a", // green-600
         },
       },
       fontFamily: {
-        // Inter for UI body, Inter Tight (or Inter heavier weights) for display
-        display: ['"Inter"', "system-ui", "sans-serif"],
+        // Inter Tight for display (tighter, more editorial), Inter for body.
+        display: ['"Inter Tight"', '"Inter"', "system-ui", "sans-serif"],
         sans: ['"Inter"', "system-ui", "sans-serif"],
         mono: ['"JetBrains Mono"', "ui-monospace", "monospace"],
       },
       fontSize: {
-        meta: ["11px", { lineHeight: "16px", letterSpacing: "0.04em" }],
+        meta: ["10.5px", { lineHeight: "16px", letterSpacing: "0.12em" }],
+      },
+      letterSpacing: {
+        tightest: "-0.04em",
+        tighter: "-0.025em",
       },
       borderRadius: {
-        sm: "4px",
-        DEFAULT: "6px",
-        md: "8px",
-        lg: "12px",
-        xl: "16px",
+        sm: "3px",
+        DEFAULT: "5px",
+        md: "6px",
+        lg: "8px",
+        xl: "12px",
       },
       boxShadow: {
-        soft: "0 1px 2px rgba(15, 23, 42, 0.04)",
-        card: "0 2px 8px rgba(15, 23, 42, 0.06)",
-        modal: "0 16px 40px rgba(15, 23, 42, 0.16)",
+        soft: "0 1px 2px rgba(10, 10, 11, 0.04)",
+        card: "0 1px 0 rgba(10, 10, 11, 0.03)",
+        modal: "0 20px 50px -12px rgba(10, 10, 11, 0.25)",
+      },
+      keyframes: {
+        "fade-rise": {
+          "0%": { opacity: "0", transform: "translateY(4px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        "pulse-dot": {
+          "0%, 100%": { opacity: "1", transform: "scale(1)" },
+          "50%": { opacity: "0.45", transform: "scale(0.85)" },
+        },
+      },
+      animation: {
+        "fade-rise": "fade-rise 0.5s cubic-bezier(0.2, 0.6, 0.2, 1) both",
+        "pulse-dot": "pulse-dot 2.4s ease-in-out infinite",
       },
     },
   },

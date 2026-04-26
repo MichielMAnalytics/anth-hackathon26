@@ -2,9 +2,17 @@ interface Props {
   data: number[];
   width?: number;
   height?: number;
+  stroke?: string;
+  fill?: string;
 }
 
-export function Sparkline({ data, width = 160, height = 36 }: Props) {
+export function Sparkline({
+  data,
+  width = 160,
+  height = 36,
+  stroke = "rgb(82 82 90)",
+  fill = "rgb(82 82 90 / 0.06)",
+}: Props) {
   if (data.length === 0) {
     return (
       <div
@@ -24,13 +32,18 @@ export function Sparkline({ data, width = 160, height = 36 }: Props) {
     .join(" ");
   const area = `${path} L ${(data.length - 1) * w} ${height} L 0 ${height} Z`;
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
-      <path d={area} fill="rgb(58 111 111 / 0.10)" />
+    <svg
+      width="100%"
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="none"
+    >
+      <path d={area} fill={fill} />
       <path
         d={path}
         fill="none"
-        stroke="rgb(42 87 87)"
-        strokeWidth="1.5"
+        stroke={stroke}
+        strokeWidth="1.25"
         strokeLinejoin="round"
         strokeLinecap="round"
       />

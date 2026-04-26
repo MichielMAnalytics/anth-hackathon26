@@ -11,6 +11,7 @@ import type {
 import { AudiencePicker } from "./AudiencePicker";
 import { ChannelSelector } from "./ChannelSelector";
 import { VerificationPanel } from "./VerificationPanel";
+import { Select } from "../Select";
 
 interface Props {
   mode: SendMode;
@@ -171,17 +172,15 @@ export function SendModal({ mode, incident, audiences, onClose, defaults }: Prop
           </Section>
 
           <Section label="Region">
-            <select
+            <Select<Region>
               value={region}
-              onChange={(e) => setRegion(e.target.value as Region)}
-              className="bg-white border border-surface-300 rounded-md px-3 py-2 text-sm text-ink-900 focus:outline-none focus:border-brand-600"
-            >
-              {Object.entries(REGION_LABEL).map(([id, label]) => (
-                <option key={id} value={id}>
-                  {label}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setRegion(v)}
+              options={Object.entries(REGION_LABEL).map(([id, label]) => ({
+                value: id as Region,
+                label,
+              }))}
+              ariaLabel="Broadcast region"
+            />
           </Section>
 
           <Section label="Audience">

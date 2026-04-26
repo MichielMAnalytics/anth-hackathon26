@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import { useStore, type IssueFilter } from "../lib/store";
 import type { Region } from "../lib/types";
+import { Select } from "./Select";
 
 const REGIONS: { id: Region | "all"; label: string }[] = [
   { id: "all", label: "All regions" },
@@ -12,12 +13,12 @@ const REGIONS: { id: Region | "all"; label: string }[] = [
   { id: "LBN_BEIRUT", label: "Beirut, Lebanon" },
 ];
 
-const ISSUES: { id: IssueFilter; label: string; icon: string }[] = [
-  { id: "all", label: "All issues", icon: "◇" },
-  { id: "missing_person", label: "Missing person", icon: "👤" },
-  { id: "medical", label: "Medical", icon: "⚕" },
-  { id: "resource_shortage", label: "Resource shortage", icon: "💧" },
-  { id: "safety", label: "Safety", icon: "⚠" },
+const ISSUES: { id: IssueFilter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "missing_person", label: "Missing person" },
+  { id: "medical", label: "Medical" },
+  { id: "resource_shortage", label: "Resource" },
+  { id: "safety", label: "Safety" },
 ];
 
 export function FilterBar() {
@@ -27,50 +28,44 @@ export function FilterBar() {
   const setIssue = useStore((s) => s.setIssueFilter);
 
   return (
-    <div className="border-b border-surface-300 bg-surface-50 px-6 py-3 flex items-center gap-4 flex-wrap">
-      <label className="flex items-center gap-2">
-        <span className="text-meta uppercase tracking-wider text-ink-500">
-          Region
+    <div className="border-b border-surface-300 bg-white px-6 py-3 flex items-center gap-5 flex-wrap">
+      <div className="flex items-center gap-2.5">
+        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-500">
+          /// Region
         </span>
-        <select
+        <Select<Region | "all">
           value={region}
-          onChange={(e) =>
-            setRegion(e.target.value as Region | "all")
-          }
-          className="bg-surface-50 border border-surface-300 rounded-md px-2.5 py-1.5 text-sm text-ink-900 focus:outline-none focus:border-brand-600 focus:ring-1 focus:ring-brand-600/20"
-        >
-          {REGIONS.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.label}
-            </option>
-          ))}
-        </select>
-      </label>
+          onChange={(v) => setRegion(v)}
+          options={REGIONS.map((r) => ({ value: r.id, label: r.label }))}
+          ariaLabel="Filter by region"
+        />
+      </div>
 
-      <div className="h-5 w-px bg-surface-300" />
+      <span className="h-4 w-px bg-surface-300" />
 
-      <div className="flex items-center gap-1.5 flex-wrap">
-        <span className="text-meta uppercase tracking-wider text-ink-500 mr-1">
-          Issue
+      <div className="flex items-center gap-2.5 flex-wrap">
+        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-500">
+          /// Issue
         </span>
-        {ISSUES.map((it) => {
-          const active = issue === it.id;
-          return (
-            <button
-              key={it.id}
-              onClick={() => setIssue(it.id)}
-              className={clsx(
-                "inline-flex items-center gap-1.5 px-2.5 py-1 text-sm rounded-full border transition",
-                active
-                  ? "bg-brand-600 border-brand-600 text-white"
-                  : "bg-surface-50 border-surface-300 text-ink-700 hover:bg-surface-100",
-              )}
-            >
-              <span className="text-[12px]">{it.icon}</span>
-              <span>{it.label}</span>
-            </button>
-          );
-        })}
+        <div className="flex items-center border border-surface-300 rounded-sm overflow-hidden">
+          {ISSUES.map((it) => {
+            const active = issue === it.id;
+            return (
+              <button
+                key={it.id}
+                onClick={() => setIssue(it.id)}
+                className={clsx(
+                  "px-3 py-1 text-[12.5px] font-medium transition border-r border-surface-300 last:border-r-0",
+                  active
+                    ? "bg-ink-900 text-white"
+                    : "bg-white text-ink-600 hover:text-ink-900 hover:bg-surface-100",
+                )}
+              >
+                {it.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

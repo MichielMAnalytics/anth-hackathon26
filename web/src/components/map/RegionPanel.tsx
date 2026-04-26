@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchRegionTimeline } from "../../lib/api";
 import { useStore } from "../../lib/store";
+import { navigate } from "../../lib/router";
 import type { RegionTimeline } from "../../lib/types";
 import { AnomalyBanner } from "../AnomalyBanner";
 import { SeverityChip } from "../SeverityChip";
@@ -12,7 +13,6 @@ export function RegionPanel() {
   const selectedRegion = useStore((s) => s.selectedRegion);
   const regions = useStore((s) => s.regions);
   const incidents = useStore((s) => s.incidents);
-  const setTab = useStore((s) => s.setTab);
   const selectIncident = useStore((s) => s.selectIncident);
 
   const stats =
@@ -119,7 +119,7 @@ export function RegionPanel() {
                 <button
                   onClick={() => {
                     selectIncident(inc.id);
-                    setTab("cases");
+                    navigate("cases");
                   }}
                   className="w-full text-left px-3 py-2 rounded-md border border-surface-300 bg-white hover:bg-surface-100 transition flex items-center gap-2"
                 >

@@ -107,14 +107,21 @@ export async function sendCaseMessage(
   return r.json();
 }
 
-export function openStream(onEvent: (e: StreamEvent) => void) {
+export type StreamStatus = "connecting" | "open" | "closed";
+
+export function openStream(
+  onEvent: (e: StreamEvent) => void,
+  onStatus?: (s: StreamStatus) => void,
+) {
   const proto = window.location.protocol === "https:" ? "wss" : "ws";
   const url = `${proto}://${window.location.host}/ws/stream`;
   let ws: WebSocket | null = null;
   let closed = false;
 
   const connect = () => {
+    onStatus?.("connecting");
     ws = new WebSocket(url);
+    ws.onopen = () => onStatus?.("open");
     ws.onmessage = (ev) => {
       try {
         onEvent(JSON.parse(ev.data));
@@ -123,6 +130,7 @@ export function openStream(onEvent: (e: StreamEvent) => void) {
       }
     };
     ws.onclose = () => {
+      onStatus?.("closed");
       if (!closed) setTimeout(connect, 1500);
     };
   };

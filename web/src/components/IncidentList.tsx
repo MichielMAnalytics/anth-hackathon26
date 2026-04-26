@@ -1,15 +1,22 @@
 import { useMemo } from "react";
 import clsx from "clsx";
 import { useStore, SEV_RANK, type IssueFilter } from "../lib/store";
-import type { Category, Region } from "../lib/types";
+import type { Category, Region, Severity } from "../lib/types";
 import { SeverityChip } from "./SeverityChip";
 
-const ICONS: Record<Category, string> = {
-  missing_person: "👤",
-  resource_shortage: "💧",
-  medical: "⚕",
-  safety: "⚠",
-  other: "•",
+const CATEGORY_LABEL: Record<Category, string> = {
+  missing_person: "person",
+  resource_shortage: "resource",
+  medical: "med",
+  safety: "safety",
+  other: "signal",
+};
+
+const SEV_RAIL: Record<Severity, string> = {
+  critical: "bg-sev-critical",
+  high: "bg-sev-high",
+  medium: "bg-sev-medium",
+  low: "bg-sev-low",
 };
 
 function timeAgo(iso: string | null): string {
@@ -54,54 +61,60 @@ export function IncidentList({ region, issue }: Props) {
   }, [incidents, region, issue, me]);
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="px-5 py-4 border-b border-surface-300 bg-surface-50">
-        <div className="text-meta uppercase tracking-wider text-ink-500">
-          Cases
+    <div className="h-full flex flex-col bg-white">
+      <div className="px-5 py-5 border-b border-surface-300">
+        <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-500">
+          /// Cases
         </div>
-        <div className="font-display text-xl font-semibold text-ink-900 mt-0.5">
-          {sorted.length}{" "}
-          <span className="text-ink-500 font-normal">open</span>
+        <div className="font-display text-[28px] leading-none font-semibold text-ink-900 tracking-tighter mt-2 tabular-nums">
+          {String(sorted.length).padStart(2, "0")}
+          <span className="ml-2 text-[14px] font-normal text-ink-500 tracking-tight">
+            open
+          </span>
         </div>
       </div>
       <div className="flex-1 overflow-y-auto">
         {sorted.length === 0 && (
-          <div className="p-6 text-sm text-ink-500">
+          <div className="p-6 text-[13px] text-ink-500 leading-snug">
             No cases match the current filter. Adjust region or issue type.
           </div>
         )}
-        {sorted.map((inc) => {
+        {sorted.map((inc, i) => {
           const active = inc.id === selectedId;
           return (
             <button
               key={inc.id}
               onClick={() => select(inc.id)}
               className={clsx(
-                "w-full text-left px-5 py-3 border-b border-surface-200 transition relative",
+                "group relative w-full text-left px-5 py-4 border-b border-surface-300 transition",
                 active
-                  ? "bg-brand-50/50 border-l-[3px] border-l-brand-600 pl-[17px]"
-                  : "hover:bg-surface-100 bg-surface-50",
+                  ? "bg-surface-100"
+                  : "bg-white hover:bg-surface-100/60",
               )}
             >
-              <div className="flex items-start gap-3">
-                <div className="text-base leading-none mt-1 text-ink-700">
-                  {ICONS[inc.category] ?? "•"}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <SeverityChip severity={inc.severity} />
-                    <div className="text-meta font-mono text-ink-500 ml-auto">
-                      {timeAgo(inc.lastActivity)}
-                    </div>
-                  </div>
-                  <div className="mt-1.5 text-sm font-semibold text-ink-900 leading-snug">
-                    {inc.title}
-                  </div>
-                  <div className="mt-0.5 text-meta text-ink-500">
-                    {inc.messageCount} message
-                    {inc.messageCount === 1 ? "" : "s"}
-                  </div>
-                </div>
+              <span
+                className={clsx(
+                  "absolute left-0 top-0 bottom-0 w-[2px] transition-opacity",
+                  active ? SEV_RAIL[inc.severity] : "opacity-0",
+                )}
+              />
+              <div className="flex items-center gap-3 mb-1.5">
+                <span className="font-mono text-[10px] tracking-[0.1em] text-ink-400 tabular-nums">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <SeverityChip severity={inc.severity} />
+                <span className="ml-auto font-mono text-[10px] uppercase tracking-[0.14em] text-ink-400">
+                  {timeAgo(inc.lastActivity)}
+                </span>
+              </div>
+              <div className="font-display text-[14.5px] font-semibold text-ink-900 tracking-tight leading-snug pl-[26px]">
+                {inc.title}
+              </div>
+              <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-500 mt-1 pl-[26px]">
+                {CATEGORY_LABEL[inc.category] ?? "signal"}
+                <span className="text-surface-400"> · </span>
+                <span className="text-ink-700">{inc.messageCount}</span>{" "}
+                msg{inc.messageCount === 1 ? "" : "s"}
               </div>
             </button>
           );

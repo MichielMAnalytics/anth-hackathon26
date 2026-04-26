@@ -1,4 +1,5 @@
 import { useStore } from "../../lib/store";
+import { navigate } from "../../lib/router";
 import type { RecentDistressItem } from "../../lib/types";
 
 function fmtTime(iso: string) {
@@ -16,35 +17,45 @@ function maskPhone(p: string) {
 
 export function RecentDistress({ items }: { items: RecentDistressItem[] }) {
   const selectIncident = useStore((s) => s.selectIncident);
-  const setTab = useStore((s) => s.setTab);
 
   if (items.length === 0) {
     return (
-      <div className="text-meta text-ink-500">
-        No distress signals in the current window.
+      <div className="border border-dashed border-surface-300 rounded-md px-4 py-8 text-center">
+        <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-400">
+          No signals
+        </div>
+        <div className="text-[12.5px] text-ink-500 mt-1.5">
+          Quiet window. Channel is open.
+        </div>
       </div>
     );
   }
 
   return (
-    <ul className="space-y-2">
-      {items.map((m) => (
-        <li key={m.messageId}>
+    <ul className="divide-y divide-surface-300 border-y border-surface-300">
+      {items.map((m, i) => (
+        <li
+          key={m.messageId}
+          className="stagger-item"
+          style={{ ["--stagger-delay" as never]: `${i * 30}ms` }}
+        >
           <button
             onClick={() => {
               selectIncident(m.incidentId);
-              setTab("cases");
+              navigate("cases");
             }}
-            className="w-full text-left rounded-md border border-surface-300 bg-white hover:bg-surface-50 active:bg-surface-100 px-3 py-2.5 min-h-[44px] transition"
+            className="group w-full text-left py-3 hover:bg-white transition px-1"
           >
-            <div className="flex items-center gap-2 text-meta text-ink-500">
-              <span className="text-sev-critical">⚠</span>
-              <span className="font-mono">{maskPhone(m.from)}</span>
-              <span>·</span>
+            <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-500">
+              <span className="w-1 h-1 rounded-full bg-sev-critical" />
+              <span className="text-ink-700">{maskPhone(m.from)}</span>
+              <span className="text-surface-400">·</span>
               <span>{m.regionLabel}</span>
-              <span className="ml-auto font-mono">{fmtTime(m.ts)}</span>
+              <span className="ml-auto text-ink-400 normal-case tracking-normal">
+                {fmtTime(m.ts)}
+              </span>
             </div>
-            <div className="mt-1 text-sm text-ink-900 leading-snug line-clamp-2">
+            <div className="mt-1.5 text-[13px] text-ink-900 leading-snug line-clamp-2 group-hover:text-ink-900">
               {m.body}
             </div>
           </button>

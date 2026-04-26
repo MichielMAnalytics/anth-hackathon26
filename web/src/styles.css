@@ -9,38 +9,65 @@ body,
 }
 
 body {
-  font-feature-settings: "cv11", "ss01";
-  background: #f8fafc;
-  color: #0f172a;
+  font-feature-settings: "cv11", "ss01", "ss02";
+  background: #fafafa;
+  color: #0a0a0b;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* slim scrollbars */
+.font-mono {
+  font-variant-numeric: tabular-nums;
+}
+
+.font-display {
+  font-feature-settings: "ss01", "ss02", "cv11";
+}
+
+/* slim, neutral scrollbars */
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 *::-webkit-scrollbar-thumb {
-  background: #e2e8f0;
+  background: #e8e8eb;
   border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #c8c8cc;
 }
 *::-webkit-scrollbar-track {
   background: transparent;
 }
 
-/* Leaflet tiles tuned to be unobtrusive on the white surface */
 .leaflet-tile-pane {
   filter: saturate(0.78);
 }
 .leaflet-container {
-  background: #f1f5f9 !important;
+  background: #f4f4f5 !important;
   font-family: inherit !important;
 }
-/* Touch-friendly zoom controls (Leaflet defaults to 26px) */
 .leaflet-bar a,
 .leaflet-bar a:hover {
   width: 36px !important;
   height: 36px !important;
   line-height: 36px !important;
   font-size: 18px !important;
+}
+
+/* Stagger helper: each .stagger-item gets its own delay via inline style. */
+.stagger-item {
+  animation: fade-rise 0.5s cubic-bezier(0.2, 0.6, 0.2, 1) both;
+  animation-delay: var(--stagger-delay, 0ms);
+}
+
+@keyframes fade-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

@@ -10,6 +10,11 @@ const MESSAGE_DOT_MIN_ZOOM = 9; // show individual messages when zoomed in
 const WORLD_VIEW: L.LatLngExpression = [30, 40];
 const WORLD_ZOOM = 4;
 
+// Cinematic flyTo defaults — longer duration + lower easeLinearity for a
+// smoother, less abrupt zoom-in feel.
+const FLY_OPTS_INITIAL = { duration: 1.8, easeLinearity: 0.15 } as const;
+const FLY_OPTS_REGION = { duration: 1.1, easeLinearity: 0.2 } as const;
+
 const SEV_COLOR: Record<Severity, string> = {
   critical: "#9b4a3a",
   high: "#b07636",
@@ -32,6 +37,7 @@ export function IncidentMap() {
   const regions = useStore((s) => s.regions);
   const selectedRegion = useStore((s) => s.selectedRegion);
   const selectRegion = useStore((s) => s.selectRegion);
+  const issueFilter = useStore((s) => s.issueFilter);
   const didInitialFit = useRef(false);
   const [zoom, setZoom] = useState(WORLD_ZOOM);
   const [messagesByIncident, setMessagesByIncident] = useState<
@@ -44,6 +50,11 @@ export function IncidentMap() {
     const map = L.map(containerRef.current, {
       zoomControl: true,
       attributionControl: false,
+      zoomSnap: 0.25,
+      zoomDelta: 0.5,
+      wheelDebounceTime: 40,
+      wheelPxPerZoomLevel: 90,
+      inertia: true,
     }).setView(WORLD_VIEW, WORLD_ZOOM);
 
     L.tileLayer(
@@ -77,6 +88,7 @@ export function IncidentMap() {
   useEffect(() => {
     if (zoom < MESSAGE_DOT_MIN_ZOOM) return;
     const wanted = Object.values(incidents).filter((i) => {
+      if (issueFilter !== "all" && i.category !== issueFilter) return false;
       if (selectedRegion === "all") return true;
       return i.region === selectedRegion;
     });
@@ -90,7 +102,7 @@ export function IncidentMap() {
         )
         .catch(() => {});
     });
-  }, [zoom, incidents, selectedRegion, messagesByIncident]);
+  }, [zoom, incidents, selectedRegion, issueFilter, messagesByIncident]);
 
   // points for heatmap (one per incident, weighted by message count)
   const heatPoints = useMemo<[number, number, number][]>(() => {
@@ -99,8 +111,9 @@ export function IncidentMap() {
         (i): i is Incident & { lat: number; lon: number } =>
           typeof i.lat === "number" && typeof i.lon === "number",
       )
+      .filter((i) => issueFilter === "all" || i.category === issueFilter)
       .map((i) => [i.lat, i.lon, Math.min(1, 0.2 + i.messageCount * 0.15)]);
-  }, [incidents]);
+  }, [incidents, issueFilter]);
 
   // refresh heat + markers
   useEffect(() => {
@@ -129,6 +142,7 @@ export function IncidentMap() {
 
     Object.values(incidents).forEach((inc) => {
       if (typeof inc.lat !== "number" || typeof inc.lon !== "number") return;
+      if (issueFilter !== "all" && inc.category !== issueFilter) return;
       const r = 6 + Math.min(18, inc.messageCount * 3);
       const c = L.circleMarker([inc.lat, inc.lon], {
         radius: r,
@@ -144,9 +158,11 @@ export function IncidentMap() {
         )
         .on("click", () => {
           selectRegion(inc.region);
-          map.flyTo([inc.lat as number, inc.lon as number], REGION_ZOOM, {
-            duration: 0.6,
-          });
+          map.flyTo(
+            [inc.lat as number, inc.lon as number],
+            REGION_ZOOM,
+            FLY_OPTS_REGION,
+          );
         });
       group.addLayer(c);
     });
@@ -156,6 +172,7 @@ export function IncidentMap() {
     mGroup.clearLayers();
     if (zoom >= MESSAGE_DOT_MIN_ZOOM) {
       const visibleIncidents = Object.values(incidents).filter((i) => {
+        if (issueFilter !== "all" && i.category !== issueFilter) return false;
         if (selectedRegion === "all") return true;
         return i.region === selectedRegion;
       });
@@ -203,7 +220,7 @@ export function IncidentMap() {
         .bindTooltip(rs.label, { direction: "top", offset: [0, -2] })
         .on("click", () => {
           selectRegion(rs.region);
-          map.flyTo([rs.lat, rs.lon], REGION_ZOOM, { duration: 0.6 });
+          map.flyTo([rs.lat, rs.lon], REGION_ZOOM, FLY_OPTS_REGION);
         });
       group.addLayer(c);
     });
@@ -213,6 +230,7 @@ export function IncidentMap() {
     regions,
     selectRegion,
     selectedRegion,
+    issueFilter,
     zoom,
     messagesByIncident,
   ]);
@@ -224,7 +242,7 @@ export function IncidentMap() {
     if (selectedRegion === "all") return; // user explicitly chose all
     const meta = regions[selectedRegion as Region];
     if (!meta) return;
-    map.flyTo([meta.lat, meta.lon], REGION_ZOOM, { duration: 0.6 });
+    map.flyTo([meta.lat, meta.lon], REGION_ZOOM, FLY_OPTS_REGION);
   }, [selectedRegion, regions]);
 
   // on first load with data, fit to the busiest region (no need to wait for click)
@@ -237,8 +255,9 @@ export function IncidentMap() {
       .filter((s) => s.messageCount > 0)
       .sort((a, b) => b.messageCount - a.messageCount)[0];
     if (busiest && useStore.getState().selectedRegion === "all") {
-      map.flyTo([busiest.lat, busiest.lon], REGION_ZOOM, { duration: 0 });
-      selectRegion(busiest.region);
+      // Cinematic zoom-in to the busiest region, but leave the dropdown on
+      // "all regions" — don't auto-select.
+      map.flyTo([busiest.lat, busiest.lon], REGION_ZOOM, FLY_OPTS_INITIAL);
     }
     didInitialFit.current = true;
   }, [regions, selectRegion]);

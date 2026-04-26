@@ -77,17 +77,17 @@ export function CasesView() {
                 setMobilePane("list");
                 selectIncident(null);
               }}
-              className="px-2.5 py-1 text-sm text-ink-700 hover:bg-surface-100 rounded-md"
+              className="px-2.5 py-1 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-700 hover:bg-surface-100 rounded-sm transition"
               aria-label="Back to cases list"
             >
               ← Cases
             </button>
-            <div className="text-sm font-semibold text-ink-900 truncate flex-1">
+            <div className="font-display text-[14px] font-semibold tracking-tight text-ink-900 truncate flex-1">
               {incident.title}
             </div>
             <button
               onClick={() => setMobilePane("profile")}
-              className="px-2.5 py-1 text-sm text-ink-700 border border-surface-300 rounded-md hover:bg-surface-100"
+              className="px-2.5 py-1 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-700 border border-surface-300 rounded-sm hover:bg-surface-100 transition"
             >
               Profile
             </button>
@@ -116,9 +116,11 @@ export function CasesView() {
           type="button"
           onClick={() => setProfileOpen(true)}
           aria-label="Show case profile"
-          className="hidden md:flex absolute top-3 right-3 z-20 items-center gap-1.5 px-2.5 h-10 bg-white border border-surface-300 rounded-md text-meta uppercase tracking-wider text-ink-700 hover:bg-surface-100 shadow-sm"
+          className="hidden md:flex absolute top-3 right-3 z-20 items-center gap-2 px-3 h-9 bg-white border border-surface-300 rounded-sm font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-700 hover:bg-surface-100 hover:border-ink-400 transition"
         >
-          <span aria-hidden="true">◀</span>
+          <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+            <path d="M6.5 1.5L3 5L6.5 8.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
           <span>Profile</span>
         </button>
       )}
@@ -129,12 +131,12 @@ export function CasesView() {
           <div className="flex items-center gap-2 px-3 py-2 border-b border-surface-300">
             <button
               onClick={() => setMobilePane("thread")}
-              className="px-2.5 py-1 text-sm text-ink-700 hover:bg-surface-100 rounded-md"
+              className="px-2.5 py-1 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-700 hover:bg-surface-100 rounded-sm transition"
               aria-label="Back to thread"
             >
               ← Thread
             </button>
-            <div className="text-sm font-semibold text-ink-900 truncate flex-1">
+            <div className="font-display text-[14px] font-semibold tracking-tight text-ink-900 truncate flex-1">
               Case profile
             </div>
           </div>
@@ -174,27 +176,20 @@ function CaseProfile({
   if (!incident) {
     return (
       <>
-        <div className="px-5 py-3.5 border-b border-surface-300 flex items-start gap-2">
+        <div className="px-5 py-5 border-b border-surface-300 flex items-start gap-2">
           <div className="flex-1 min-w-0">
-            <div className="text-meta uppercase tracking-wider text-ink-500">
-              Case profile
+            <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-500">
+              /// Case profile
             </div>
-            <div className="font-display text-lg font-semibold text-ink-900 mt-0.5 leading-snug">
+            <div className="font-display text-[18px] font-semibold text-ink-900 mt-1.5 leading-snug tracking-tighter">
               —
             </div>
           </div>
           {onCollapse && (
-            <button
-              type="button"
-              onClick={onCollapse}
-              aria-label="Hide case profile"
-              className="hidden md:inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-500 hover:bg-surface-100 hover:text-ink-700"
-            >
-              <span aria-hidden="true">▶</span>
-            </button>
+            <CollapseButton onClick={onCollapse} />
           )}
         </div>
-        <div className="flex-1 overflow-y-auto p-5 text-sm text-ink-500">
+        <div className="flex-1 overflow-y-auto p-5 text-[13px] text-ink-500">
           Select a case to see its profile.
         </div>
       </>
@@ -202,38 +197,29 @@ function CaseProfile({
   }
   return (
     <>
-      <div className="px-5 py-3.5 border-b border-surface-300 flex items-start gap-2">
+      <div className="px-5 py-5 border-b border-surface-300 flex items-start gap-2">
         <div className="flex-1 min-w-0">
-          <div className="text-meta uppercase tracking-wider text-ink-500">
-            Case profile
+          <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-500">
+            /// Case profile
           </div>
-          <div className="font-display text-lg font-semibold text-ink-900 mt-0.5 leading-snug">
+          <div className="font-display text-[20px] font-semibold text-ink-900 mt-1.5 leading-tight tracking-tighter">
             {incident.title}
           </div>
         </div>
-        {onCollapse && (
-          <button
-            type="button"
-            onClick={onCollapse}
-            aria-label="Hide case profile"
-            className="hidden md:inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-500 hover:bg-surface-100 hover:text-ink-700 shrink-0"
-          >
-            <span aria-hidden="true">▶</span>
-          </button>
-        )}
+        {onCollapse && <CollapseButton onClick={onCollapse} />}
       </div>
-      <div className="flex-1 overflow-y-auto p-5 space-y-5">
+      <div className="flex-1 overflow-y-auto p-5 space-y-6">
         <CaseMiniMap incident={incident} />
         <DetailPanel incident={incident} />
       </div>
       {(incident.category === "missing_person" ||
         incident.category === "medical" ||
         incident.category === "resource_shortage") && (
-        <div className="p-4 border-t border-surface-300 space-y-2">
+        <div className="p-4 border-t border-surface-300">
           {incident.category === "missing_person" && (
             <button
               onClick={onAlert}
-              className="w-full px-3 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-md"
+              className="w-full px-3 py-3 bg-brand-600 hover:bg-brand-700 text-white font-mono text-[11px] uppercase tracking-[0.14em] font-semibold rounded-sm transition"
             >
               Send Amber Alert broadcast
             </button>
@@ -242,7 +228,7 @@ function CaseProfile({
             incident.category === "resource_shortage") && (
             <button
               onClick={onRequest}
-              className="w-full px-3 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-md"
+              className="w-full px-3 py-3 bg-brand-600 hover:bg-brand-700 text-white font-mono text-[11px] uppercase tracking-[0.14em] font-semibold rounded-sm transition"
             >
               Request help broadcast
             </button>
@@ -250,5 +236,20 @@ function CaseProfile({
         </div>
       )}
     </>
+  );
+}
+
+function CollapseButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Hide case profile"
+      className="hidden md:inline-flex h-7 w-7 items-center justify-center rounded-sm text-ink-500 hover:bg-surface-100 hover:text-ink-900 shrink-0 transition"
+    >
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+        <path d="M3.5 1.5L7 5L3.5 8.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </button>
   );
 }

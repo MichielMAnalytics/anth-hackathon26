@@ -2,10 +2,17 @@ import clsx from "clsx";
 import type { Severity } from "../lib/types";
 
 const STYLES: Record<Severity, string> = {
-  critical: "bg-sev-critical/10 text-sev-critical border-sev-critical/30",
-  high: "bg-sev-high/10 text-sev-high border-sev-high/30",
-  medium: "bg-sev-medium/10 text-sev-medium border-sev-medium/30",
-  low: "bg-sev-low/10 text-sev-low border-sev-low/30",
+  critical: "text-sev-critical",
+  high: "text-sev-high",
+  medium: "text-sev-medium",
+  low: "text-sev-low",
+};
+
+const DOT: Record<Severity, string> = {
+  critical: "bg-sev-critical",
+  high: "bg-sev-high",
+  medium: "bg-sev-medium",
+  low: "bg-sev-low",
 };
 
 const LABEL: Record<Severity, string> = {
@@ -17,13 +24,16 @@ const LABEL: Record<Severity, string> = {
 
 export function SeverityChip({ severity }: { severity: Severity }) {
   return (
-    <span
-      className={clsx(
-        "inline-flex items-center px-2 py-0.5 text-meta font-medium border rounded-full",
-        STYLES[severity],
-      )}
-    >
-      {LABEL[severity]}
+    <span className="inline-flex items-center gap-1.5 select-none">
+      <span className={clsx("w-1.5 h-1.5 rounded-full", DOT[severity])} />
+      <span
+        className={clsx(
+          "font-mono text-[10px] uppercase tracking-[0.14em] font-semibold",
+          STYLES[severity],
+        )}
+      >
+        {LABEL[severity]}
+      </span>
     </span>
   );
 }

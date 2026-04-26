@@ -18,7 +18,6 @@ const SEV_RANK: Record<Severity, number> = {
 };
 export { SEV_RANK };
 
-export type Tab = "dashboard" | "cases" | "map" | "stream";
 export type IssueFilter = Category | "all";
 
 interface State {
@@ -29,7 +28,6 @@ interface State {
   selectedIncidentId: string | null;
   selectedRegion: Region | "all";
   issueFilter: IssueFilter;
-  activeTab: Tab;
   me: Operator | null;
   operators: Operator[];
 
@@ -42,7 +40,6 @@ interface State {
   selectIncident: (id: string | null) => void;
   selectRegion: (r: Region | "all") => void;
   setIssueFilter: (i: IssueFilter) => void;
-  setTab: (t: Tab) => void;
   setMe: (op: Operator | null) => void;
   setOperators: (ops: Operator[]) => void;
 }
@@ -55,7 +52,6 @@ export const useStore = create<State>((set) => ({
   selectedIncidentId: null,
   selectedRegion: "all",
   issueFilter: "all",
-  activeTab: "dashboard",
   me: null,
   operators: [],
 
@@ -89,7 +85,6 @@ export const useStore = create<State>((set) => ({
   selectIncident: (id) => set({ selectedIncidentId: id }),
   selectRegion: (r) => set({ selectedRegion: r }),
   setIssueFilter: (i) => set({ issueFilter: i }),
-  setTab: (t) => set({ activeTab: t }),
   setMe: (op) => set({ me: op }),
   setOperators: (ops) => set({ operators: ops }),
 }));

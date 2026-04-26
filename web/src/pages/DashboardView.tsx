@@ -42,7 +42,6 @@ function suggestAudienceFor(
     );
     if (civ) return civ.id;
   }
-  // generic fallback: any audience that includes this region
   return audiences.find((a) => a.regions.includes(region.region))?.id;
 }
 
@@ -100,8 +99,6 @@ export function DashboardView() {
   }, [visibleRegions]);
 
   function handleAct(theme: DashboardTheme, region: DashboardRegion) {
-    // pick an incident to anchor the send to (used for incident-id linkage in
-    // the send payload). Prefer one in the same region; else fall back to any.
     const incidentId =
       theme.incidentIds?.[0] ??
       Object.values(incidents).find((i) => i.region === region.region)?.id;
@@ -121,61 +118,121 @@ export function DashboardView() {
   }
 
   return (
-    <div className="h-full overflow-y-auto md:overflow-hidden md:grid md:grid-cols-[1fr_360px] min-h-0 bg-surface-100">
-      <main className="px-4 sm:px-6 py-5 sm:py-6 md:overflow-y-auto">
-        <div className="max-w-3xl lg:max-w-6xl mx-auto space-y-4">
-          <header>
-            <div className="text-meta uppercase tracking-wider text-ink-500">
-              Insights
+    <div className="h-full overflow-y-auto md:overflow-hidden md:grid md:grid-cols-[1fr_400px] min-h-0 bg-surface-100">
+      <main className="px-4 sm:px-10 py-8 sm:py-12 md:overflow-y-auto">
+        <div className="max-w-3xl lg:max-w-6xl mx-auto space-y-10">
+          {/* Editorial header */}
+          <header className="grid grid-cols-1 lg:grid-cols-[1fr_auto] items-end gap-6">
+            <div>
+              <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-500">
+                /// Insights
+              </div>
+              <h1 className="font-display text-[40px] sm:text-[52px] leading-[1] font-semibold text-ink-900 tracking-tightest mt-3">
+                Where to act first.
+              </h1>
+              <p className="text-[14px] text-ink-500 mt-3 max-w-[58ch] leading-relaxed">
+                Regions ranked by urgency. Each card surfaces patterns across
+                recent civilian messages — and the broadcast we think will
+                help.
+              </p>
             </div>
-            <h1 className="font-display text-xl sm:text-2xl font-bold text-ink-900 tracking-tight mt-0.5">
-              Where to act first
-            </h1>
-            <p className="hidden md:block text-sm text-ink-600 mt-1 max-w-prose">
-              Regions ranked by urgency. Each card surfaces the patterns
-              across recent civilian messages and a one-click broadcast we
-              think will help.
-            </p>
+            {data && (
+              <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-500 lg:text-right">
+                <div>Window</div>
+                <div className="text-ink-900 normal-case tracking-normal mt-1 text-[13px]">
+                  last {data.windowMinutes} min
+                </div>
+              </div>
+            )}
           </header>
 
+          {/* Summary banner — flat, no boxes, vertical rules */}
           {summary && (
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 border-y border-surface-300">
               <Stat label="Open cases" value={summary.cases} />
-              <Stat label="Distress flags" value={summary.distress} tone="critical" />
-              <Stat label="Active anomalies" value={summary.anomalies} tone="high" />
+              <Stat
+                label="Distress flags"
+                value={summary.distress}
+                tone="critical"
+                divider
+              />
+              <Stat
+                label="Active anomalies"
+                value={summary.anomalies}
+                tone="high"
+                divider
+              />
             </div>
           )}
 
           {!data && (
-            <div className="rounded-lg border border-dashed border-surface-300 bg-white p-8 text-center text-sm text-ink-500">
-              Loading insights…
+            <div className="border border-dashed border-surface-300 rounded-lg p-10 text-center">
+              <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-400">
+                Loading
+              </div>
+              <div className="font-display text-[18px] text-ink-700 tracking-tight mt-1.5">
+                Reading the wire…
+              </div>
             </div>
           )}
 
           {data && visibleRegions.length === 0 && (
-            <div className="rounded-lg border border-dashed border-surface-300 bg-white p-8 text-center text-sm text-ink-500">
-              No regions in your scope right now. Switch to a different
-              operator from the header to widen the view.
+            <div className="border border-dashed border-surface-300 rounded-lg p-10 text-center">
+              <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-400">
+                No scope
+              </div>
+              <div className="text-[13px] text-ink-500 mt-1.5 max-w-[42ch] mx-auto">
+                No regions in your scope right now. Switch operator from the
+                header to widen the view.
+              </div>
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-            {visibleRegions.map((r) => (
-              <RegionCard key={r.region} region={r} onAct={handleAct} />
-            ))}
-          </div>
+          {visibleRegions.length > 0 && (
+            <section>
+              <div className="flex items-baseline justify-between mb-4 pb-3 border-b border-surface-300">
+                <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-500">
+                  /// Regions
+                </div>
+                <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-400 tabular-nums">
+                  {String(visibleRegions.length).padStart(2, "0")} total
+                </div>
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+                {visibleRegions.map((r, i) => (
+                  <div
+                    key={r.region}
+                    className="stagger-item"
+                    style={{ ["--stagger-delay" as never]: `${i * 50}ms` }}
+                  >
+                    <RegionCard region={r} index={i} onAct={handleAct} />
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          <footer className="pt-6 border-t border-surface-300 flex items-center justify-between font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-400">
+            <span>SafeThread · Operator Console</span>
+            <span className="normal-case tracking-normal">
+              {visibleRegions.length} region{visibleRegions.length === 1 ? "" : "s"} · live
+            </span>
+          </footer>
         </div>
       </main>
 
-      <aside className="md:border-l border-t md:border-t-0 border-surface-300 bg-surface-50 md:overflow-y-auto md:max-h-full">
-        <div className="p-4 sm:p-5 space-y-4 sm:space-y-5">
+      <aside className="md:border-l border-t md:border-t-0 border-surface-300 bg-white md:overflow-y-auto md:max-h-full">
+        <div className="px-6 py-8 sm:py-10 space-y-5">
           <div>
-            <div className="text-meta uppercase tracking-wider text-ink-500">
+            <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-500">
+              /// The wire
+            </div>
+            <h2 className="font-display text-[22px] leading-tight font-semibold text-ink-900 tracking-tighter mt-2">
               Recent distress
-            </div>
-            <div className="text-sm text-ink-600 mt-1">
+            </h2>
+            <p className="text-[12.5px] text-ink-500 mt-1.5 leading-snug">
               Latest civilian messages flagged distress. Click to open the case.
-            </div>
+            </p>
           </div>
           <RecentDistress items={data?.recentDistress ?? []} />
         </div>
@@ -198,10 +255,12 @@ function Stat({
   label,
   value,
   tone,
+  divider,
 }: {
   label: string;
   value: number;
   tone?: "critical" | "high";
+  divider?: boolean;
 }) {
   const color =
     tone === "critical"
@@ -210,11 +269,13 @@ function Stat({
         ? "text-sev-high"
         : "text-ink-900";
   return (
-    <div className="rounded-lg border border-surface-300 bg-white px-4 py-3">
-      <div className="text-meta uppercase tracking-wider text-ink-500">
+    <div className={`px-6 py-5 ${divider ? "border-l border-surface-300" : ""}`}>
+      <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-500">
         {label}
       </div>
-      <div className={`font-mono text-2xl leading-tight mt-0.5 ${color}`}>
+      <div
+        className={`font-display text-[44px] sm:text-[52px] leading-none tracking-tightest mt-2 tabular-nums ${color}`}
+      >
         {value}
       </div>
     </div>
