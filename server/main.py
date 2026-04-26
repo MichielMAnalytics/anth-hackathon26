@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
@@ -31,12 +32,59 @@ logger = logging.getLogger(__name__)
 _triage_task: Optional[asyncio.Task] = None
 _agent_task: Optional[asyncio.Task] = None
 _heartbeat_task: Optional[asyncio.Task] = None
+_demo_bootstrap_task: Optional[asyncio.Task] = None
 _event_bus: Optional[PostgresEventBus] = None
+
+
+def _truthy(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+async def _demo_bootstrap(session_maker, eventbus: PostgresEventBus) -> None:
+    """Idempotent demo-mode startup: optionally seed and start the drip.
+
+    Toggled by env vars so the same image runs cleanly for tests / dev:
+      SEED_ON_BOOT=true       — call seed_rich() if Warchild isn't there yet
+      REPLAY_AUTOSTART=true   — start the live replay drip
+      REPLAY_INTERVAL_SEC=4   — how often the drip fires (default 4)
+    """
+    if _truthy("SEED_ON_BOOT"):
+        try:
+            from server.sim.seeder import seed_rich
+
+            async with session_maker() as session:
+                result = await seed_rich(session, reset=False)
+                logger.info(
+                    "demo-bootstrap: seed_on_boot result alreadyExisted=%s alerts=%s",
+                    result.get("alreadyExisted"),
+                    (result.get("seeded") or {}).get("alerts"),
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("demo-bootstrap: seed failed: %s", exc)
+
+    if _truthy("REPLAY_AUTOSTART"):
+        try:
+            interval = float(os.environ.get("REPLAY_INTERVAL_SEC", "4") or "4")
+        except ValueError:
+            interval = 4.0
+        # Wait a beat so workers + DB are warm and the seed has committed.
+        await asyncio.sleep(3.0)
+        try:
+            from server.sim.replay import start_replay
+
+            state = start_replay(session_maker, eventbus, interval_sec=interval)
+            logger.info(
+                "demo-bootstrap: replay started (running=%s, interval=%ss)",
+                state.get("running"),
+                state.get("intervalSec"),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("demo-bootstrap: replay start failed: %s", exc)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _triage_task, _agent_task, _heartbeat_task, _event_bus
+    global _triage_task, _agent_task, _heartbeat_task, _demo_bootstrap_task, _event_bus
     engine = get_engine()
     session_maker = get_session_maker()
     _event_bus = PostgresEventBus(engine)
@@ -52,16 +100,28 @@ async def lifespan(app: FastAPI):
         heartbeat_loop(_event_bus, session_maker),
         name="heartbeat",
     )
+    _demo_bootstrap_task = asyncio.create_task(
+        _demo_bootstrap(session_maker, _event_bus),
+        name="demo-bootstrap",
+    )
     try:
         yield
     finally:
-        for t in (_triage_task, _agent_task, _heartbeat_task):
+        for t in (_triage_task, _agent_task, _heartbeat_task, _demo_bootstrap_task):
             if t and not t.done():
                 t.cancel()
                 try:
                     await asyncio.wait_for(t, timeout=5.0)
                 except (asyncio.CancelledError, asyncio.TimeoutError):
                     pass
+        # Best-effort: stop the drip if it's running (its task lives in
+        # the same loop and would otherwise outlast the app.)
+        try:
+            from server.sim import replay as _replay
+
+            await _replay.stop_replay()
+        except Exception:  # noqa: BLE001
+            pass
         if _event_bus:
             await _event_bus.close()
 

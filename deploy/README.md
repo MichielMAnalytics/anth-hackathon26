@@ -167,3 +167,6 @@ All read by the app via `pydantic-settings`. Override in `.env` on the VM
 | `JWT_SECRET` | `change-me` | NGO operator JWT signing (auth not yet enforced everywhere) |
 | `HEARTBEAT_INTERVAL_SEC` | `300` | how often the heartbeat scheduler ticks each active alert. Drop to `60` for a livelier demo. |
 | `HEARTBEAT_ENABLED` | `true` | set to `false` to skip the heartbeat task entirely |
+| `SEED_ON_BOOT` | `true` (compose) | call `seed_rich()` on app startup if Warchild isn't present yet. Idempotent; safe to leave on. |
+| `REPLAY_AUTOSTART` | `true` (compose) | start the live drip a few seconds after boot so the dashboard is alive without manual curl. |
+| `REPLAY_INTERVAL_SEC` | `4` | drip cadence when autostarted. Lower = busier dashboard. |

@@ -29,6 +29,11 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       HEARTBEAT_INTERVAL_SEC: ${HEARTBEAT_INTERVAL_SEC:-300}
       HEARTBEAT_ENABLED: ${HEARTBEAT_ENABLED:-true}
+      # Demo mode — single `docker compose up` lands a populated, breathing
+      # dashboard. Set to false (or unset) to skip the seed and the drip.
+      SEED_ON_BOOT: ${SEED_ON_BOOT:-true}
+      REPLAY_AUTOSTART: ${REPLAY_AUTOSTART:-true}
+      REPLAY_INTERVAL_SEC: ${REPLAY_INTERVAL_SEC:-4}
     ports: ["8080:8080"]
 
 volumes:
