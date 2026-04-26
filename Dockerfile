@@ -11,10 +11,11 @@ FROM python:3.12-slim
 WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    PATH="/app/.venv/bin:${PATH}"
 
 COPY pyproject.toml uv.lock* ./
-RUN pip install --no-cache-dir uv && uv sync --no-dev --frozen || (pip install --no-cache-dir uv && uv pip install --system --no-cache .)
+RUN pip install --no-cache-dir uv && uv sync --no-dev --frozen
 
 COPY server/ ./server/
 COPY --from=web /web/dist ./web/dist
