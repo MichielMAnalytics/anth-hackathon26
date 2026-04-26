@@ -25,7 +25,10 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql+asyncpg://app:app@db:5432/matching
-      JWT_SECRET: change-me
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      HEARTBEAT_INTERVAL_SEC: ${HEARTBEAT_INTERVAL_SEC:-300}
+      HEARTBEAT_ENABLED: ${HEARTBEAT_ENABLED:-true}
     ports: ["8080:8080"]
 
 volumes:

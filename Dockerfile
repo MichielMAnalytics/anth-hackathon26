@@ -24,4 +24,6 @@ COPY alembic/ ./alembic/
 COPY db/ ./db/
 
 EXPOSE 8080
-CMD ["uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8080"]
+# Run alembic migrations once before serving so the schema exists when
+# the workers boot. Idempotent — re-running does nothing.
+CMD ["sh", "-c", "alembic upgrade head && uvicorn server.main:app --host 0.0.0.0 --port 8080"]
