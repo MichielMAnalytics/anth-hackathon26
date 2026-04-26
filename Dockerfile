@@ -35,6 +35,16 @@ COPY alembic.ini .
 COPY alembic/ ./alembic/
 COPY db/ ./db/
 
+# Run as a non-root user. The Claude Code CLI (spawned by claude-agent-sdk)
+# refuses --dangerously-skip-permissions while uid=0 ("cannot be used with
+# root/sudo privileges for security reasons"), which is the permission_mode
+# the agent worker uses. Create a dedicated user, give it /app + a writable
+# HOME for the CLI's per-user state, then drop privileges.
+RUN useradd -m -u 1000 -s /bin/bash app \
+    && chown -R app:app /app
+USER app
+ENV HOME=/home/app
+
 EXPOSE 8080
 # Use absolute venv paths so the entrypoint doesn't depend on PATH,
 # which has been bitten by docker layer caching during this build.
