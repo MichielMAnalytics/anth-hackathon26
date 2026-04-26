@@ -74,6 +74,61 @@ export async function fetchRegionTimeline(
   return r.json();
 }
 
+export interface CreateIncidentPayload {
+  person_name: string;
+  description: string;
+  region: Region;
+  category: "missing_person" | "medical" | "resource_shortage" | "safety";
+  urgency_tier?: "low" | "medium" | "high" | "critical";
+}
+
+export async function createIncident(p: CreateIncidentPayload): Promise<Incident> {
+  const r = await fetch("/api/incidents", {
+    method: "POST",
+    headers: ah({ "content-type": "application/json" }),
+    body: JSON.stringify(p),
+  });
+  if (!r.ok) {
+    let detail = `${r.status}`;
+    try {
+      const j = await r.json();
+      if (j?.detail) detail = typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail);
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail);
+  }
+  return r.json();
+}
+
+export interface UpdateIncidentPayload {
+  description?: string;
+  urgency_tier?: "low" | "medium" | "high" | "critical";
+  status?: "active" | "resolved" | "archived";
+}
+
+export async function updateIncident(
+  id: string,
+  p: UpdateIncidentPayload,
+): Promise<Incident> {
+  const r = await fetch(`/api/incidents/${id}`, {
+    method: "PATCH",
+    headers: ah({ "content-type": "application/json" }),
+    body: JSON.stringify(p),
+  });
+  if (!r.ok) {
+    let detail = `${r.status}`;
+    try {
+      const j = await r.json();
+      if (j?.detail) detail = typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail);
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail);
+  }
+  return r.json();
+}
+
 export async function sendBroadcast(
   mode: SendMode,
   payload: {

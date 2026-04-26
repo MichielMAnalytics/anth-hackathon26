@@ -9,7 +9,7 @@ from server.api.incidents import alert_to_incident_shape
 from server.db.alerts import Alert
 from server.db.decisions import AgentDecision, ToolCall
 from server.db.engine import get_engine, get_session_maker
-from server.db.messages import Bucket, InboundMessage
+from server.db.messages import Bucket, InboundMessage, TriagedMessage
 from server.eventbus.postgres import PostgresEventBus
 from server.workers.narrate import narrate_call, narrate_decision
 
@@ -52,7 +52,19 @@ async def _compose_inbound_event(msg_id: str) -> Optional[dict]:
         alert: Optional[Alert] = None
         if msg.in_reply_to_alert_id:
             alert = await s.get(Alert, msg.in_reply_to_alert_id)
-        return {"type": "message", "incident": _incident_shape(alert), "message": _message_shape(msg)}
+        triage = await s.get(TriagedMessage, msg_id)
+    payload = _message_shape(msg)
+    payload["triage"] = (
+        {
+            "classification": triage.classification,
+            "confidence": float(triage.confidence) if triage.confidence is not None else None,
+            "geohash6": triage.geohash6,
+            "language": triage.language,
+        }
+        if triage is not None
+        else None
+    )
+    return {"type": "message", "incident": _incident_shape(alert), "message": payload}
 
 
 async def _compose_incident_event(alert_id: str) -> Optional[dict]:
@@ -185,6 +197,10 @@ async def ws_stream(websocket: WebSocket):
                 evt: Optional[dict] = None
                 if channel == "new_inbound":
                     evt = await _compose_inbound_event(payload)
+                elif channel == "inbound_triaged":
+                    # Re-emit a "message" event with triage fields filled
+                    # in. Frontend treats it as an upsert by msg_id.
+                    evt = await _compose_inbound_event(payload)
                 elif channel == "incident_upserted":
                     evt = await _compose_incident_event(payload)
                 elif channel == "agent_thinking":
@@ -216,7 +232,7 @@ async def ws_stream(websocket: WebSocket):
 
     tasks = [
         asyncio.create_task(listen(c)) for c in (
-            "new_inbound", "incident_upserted",
+            "new_inbound", "inbound_triaged", "incident_upserted",
             "agent_thinking", "decision_made",
             "suggestion_pending", "suggestion_resolved",
         )

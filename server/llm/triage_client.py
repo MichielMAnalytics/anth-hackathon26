@@ -41,16 +41,42 @@ async def classify(body: str, alert_summary: Optional[str]) -> dict:
 
     client = anthropic.AsyncAnthropic(api_key=api_key)
     system = (
-        "You are a triage classifier for civilian sighting reports for a missing-person "
-        "alert system. Classify the message, extract a 6-character geohash if possible, "
-        "detect language, and produce a stable dedup_hash from the normalized body. "
-        "Return ONLY the structured tool call."
+        "You are a triage classifier for civilian messages reaching an NGO operating "
+        "in a humanitarian crisis. The NGO works four kinds of cases:\n"
+        "  1. missing_person  — people reported missing, last-seen reports, sightings of missing persons\n"
+        "  2. medical         — injuries, illness, medical evacuation, requests for medics or supplies\n"
+        "  3. resource_shortage — water, food, fuel, shelter, baby formula, blankets, etc.\n"
+        "  4. safety          — fires, unsafe routes, ongoing incidents, security threats, evacuation needs\n\n"
+        "PRIMARY RULE: if the message could plausibly be promoted into ANY of the four "
+        "case categories above, classify it as `sighting`. This is by far the most common "
+        "category. Examples that are ALL `sighting`:\n"
+        "  • 'I NEED A MEDIC RIGHT NOW' (medical)\n"
+        "  • 'we have no water in district 4 since yesterday' (resource_shortage)\n"
+        "  • 'fire on the south road, avoid' (safety)\n"
+        "  • 'my brother is missing, last seen at the bus station' (missing_person)\n"
+        "  • 'I saw Maryam near the central market' (missing_person)\n"
+        "  • 'ALERT, my neighbour is missing' (missing_person — the word ALERT is the writer "
+        "    raising one, NOT acknowledging a prior NGO alert)\n\n"
+        "Other categories — use sparingly:\n"
+        "  • question — the user is ONLY asking the NGO for information / status and reports nothing new "
+        "    (e.g. 'any updates on Maryam?'). If they're also reporting something, it's a `sighting`.\n"
+        "  • ack — short acknowledgement of an NGO-issued alert the user previously received. "
+        "    Words like 'ALERT' or 'help' written BY the user do NOT make a message an ack — those are "
+        "    sightings. True acks look like: 'received', 'got it, thanks', 'understood', 'on my way'.\n"
+        "  • noise — actually off-topic, automated, gibberish, or unrelated to humanitarian work. "
+        "    A short message that names a person, a place, or a need is NEVER noise.\n"
+        "  • bad_actor — spam, abuse, or appears intentionally false.\n\n"
+        "When in doubt between `sighting` and any other label, choose `sighting`. The cost of "
+        "missing a real distress signal far outweighs the cost of an operator glancing at one extra "
+        "message.\n\n"
+        "Extract a 6-character geohash if a location is mentionable, detect language, and produce a "
+        "stable dedup_hash from the normalized body. Return ONLY the structured tool call."
     )
     context = f"\n\nAlert context: {alert_summary}" if alert_summary else ""
 
     tool = {
         "name": "classify",
-        "description": "Classify an inbound civilian sighting message.",
+        "description": "Classify an inbound civilian distress / report message across all NGO case categories.",
         "input_schema": {
             "type": "object",
             "properties": {

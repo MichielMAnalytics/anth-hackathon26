@@ -103,7 +103,12 @@ async def triage_worker_loop(
         try:
             await _process_message(msg_id, session_maker)
             retry_counts.pop(msg_id, None)
+            # Wakes the agent worker on alert-tied messages.
             await eventbus.publish("bucket_open", msg_id)
+            # Wakes the WS layer to re-emit the message event enriched with
+            # triage data so the dashboard's wire can render the
+            # classification pill + "Make a case" affordance.
+            await eventbus.publish("inbound_triaged", msg_id)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
