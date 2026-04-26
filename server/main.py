@@ -4,8 +4,10 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from server.api.agent_feed import router as agent_feed_router
 from server.api.audiences import router as audiences_router
@@ -84,13 +86,31 @@ app.include_router(ws_router)
 # is no web/dist and Vite serves the SPA on :5173 with /api proxied here, so
 # we mount only when the build is present.
 #
-# StaticFiles(html=True) serves files at any path under the mount — covering
-# /index.html, /assets/*, /bitchat.png, /warchild.png, etc. — and falls back
-# to index.html for unmatched paths so SPA history routes survive refresh.
-# Mounted last so API routers take precedence.
+# StaticFiles serves files under web/dist (index.html, /assets/*, root-level
+# pngs, etc.). For any non-API path that doesn't resolve to a file (e.g.
+# /cases on hard refresh) we fall back to index.html so React Router can
+# pick up history routes. Mounted last so API routers take precedence.
 # ---------------------------------------------------------------------------
 
 _WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
+_INDEX_HTML = _WEB_DIST / "index.html"
 
 if _WEB_DIST.is_dir():
     app.mount("/", StaticFiles(directory=_WEB_DIST, html=True), name="spa")
+
+    _NON_SPA_PREFIXES = ("/api", "/ws", "/health", "/assets")
+
+    @app.exception_handler(StarletteHTTPException)
+    async def _spa_history_fallback(request: Request, exc: StarletteHTTPException):
+        path = request.url.path
+        if (
+            exc.status_code == 404
+            and request.method == "GET"
+            and not path.startswith(_NON_SPA_PREFIXES)
+            and _INDEX_HTML.is_file()
+        ):
+            return FileResponse(_INDEX_HTML)
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+        )
