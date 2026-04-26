@@ -12,9 +12,7 @@ import type {
   SendMode,
 } from "../lib/types";
 import { RegionCard } from "../components/dashboard/RegionCard";
-import { RecentDistress } from "../components/dashboard/RecentDistress";
 import { SendModal } from "../components/send/SendModal";
-import { AgentNowPlaying } from "../components/AgentNowPlaying";
 
 interface PreparedSend {
   mode: SendMode;
@@ -119,8 +117,8 @@ export function DashboardView() {
   }
 
   return (
-    <div className="h-full overflow-y-auto md:overflow-hidden md:grid md:grid-cols-[1fr_400px] min-h-0 bg-surface-100">
-      <main className="px-4 sm:px-10 py-8 sm:py-12 md:overflow-y-auto">
+    <div className="h-full overflow-y-auto min-h-0 bg-surface-100">
+      <main className="px-4 sm:px-10 py-8 sm:py-12">
         <div className="max-w-3xl lg:max-w-6xl mx-auto space-y-10">
           {/* Editorial header */}
           <header className="grid grid-cols-1 lg:grid-cols-[1fr_auto] items-end gap-6">
@@ -221,36 +219,6 @@ export function DashboardView() {
           </footer>
         </div>
       </main>
-
-      <aside className="md:border-l border-t md:border-t-0 border-surface-300 bg-white md:overflow-y-auto md:max-h-full">
-        <div className="px-6 py-8 sm:py-10 space-y-5">
-          <div>
-            <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-500">
-              /// Now playing
-            </div>
-            <h2 className="font-display text-[22px] leading-tight font-semibold text-ink-900 tracking-tighter mt-2">
-              Agent at work
-            </h2>
-            <p className="text-[12.5px] text-ink-500 mt-1.5 leading-snug">
-              Live status of the matching engine — what it's reading, what it just decided.
-            </p>
-          </div>
-          <AgentNowPlaying />
-
-          <div className="pt-4 border-t border-surface-300">
-            <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-500">
-              /// The wire
-            </div>
-            <h2 className="font-display text-[22px] leading-tight font-semibold text-ink-900 tracking-tighter mt-2">
-              Recent distress
-            </h2>
-            <p className="text-[12.5px] text-ink-500 mt-1.5 leading-snug">
-              Latest civilian messages flagged distress. Click to open the case.
-            </p>
-          </div>
-          <RecentDistress items={data?.recentDistress ?? []} />
-        </div>
-      </aside>
 
       {send && (
         <SendModal

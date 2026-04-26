@@ -14,12 +14,14 @@ import { LiveIndicator } from "./components/LiveIndicator";
 import { useStore } from "./lib/store";
 import { navigate, useRoute, type Route } from "./lib/router";
 import { DashboardView } from "./pages/DashboardView";
+import { MessagesView } from "./pages/MessagesView";
 import { CasesView } from "./pages/CasesView";
 import { MapView } from "./pages/MapView";
 import { FilterBar } from "./components/FilterBar";
 
 const TABS: { id: Route; label: string }[] = [
   { id: "dashboard", label: "Dashboard" },
+  { id: "messages", label: "Messages" },
   { id: "cases", label: "Cases" },
   { id: "map", label: "Map" },
 ];
@@ -199,7 +201,7 @@ export function App() {
         </div>
       </header>
 
-      {activeTab !== "dashboard" && (
+      {activeTab !== "dashboard" && activeTab !== "messages" && (
         <div
           className={
             activeTab === "cases" && selectedIncidentId
@@ -213,6 +215,7 @@ export function App() {
 
       <div className="flex-1 min-h-0">
         {activeTab === "dashboard" && <DashboardView />}
+        {activeTab === "messages" && <MessagesView />}
         {activeTab === "cases" && <CasesView />}
         {activeTab === "map" && <MapView />}
       </div>

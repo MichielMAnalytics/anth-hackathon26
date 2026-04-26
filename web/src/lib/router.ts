@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
 
-export type Route = "dashboard" | "cases" | "map";
+export type Route = "dashboard" | "messages" | "cases" | "map";
 
 const PATH_TO_ROUTE: Record<string, Route> = {
   "/": "dashboard",
+  "/messages": "messages",
   "/cases": "cases",
   "/map": "map",
 };
 
 const ROUTE_TO_PATH: Record<Route, string> = {
   dashboard: "/",
+  messages: "/messages",
   cases: "/cases",
   map: "/map",
 };
