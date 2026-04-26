@@ -5,6 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 
+from server.api.incidents import alert_to_incident_shape
 from server.db.alerts import Alert
 from server.db.decisions import AgentDecision, ToolCall
 from server.db.engine import get_engine, get_session_maker
@@ -16,16 +17,14 @@ logger = logging.getLogger(__name__)
 
 
 def _incident_shape(alert: Optional[Alert]) -> dict:
+    """Camel-case Incident shape, matching GET /api/incidents.
+
+    A None alert returns an empty dict so the frontend can ignore it
+    rather than upsert a placeholder with id=undefined.
+    """
     if alert is None:
-        return {"alert_id": None, "person_name": "Unknown", "status": "unknown",
-                "description": None, "photo_url": None}
-    return {
-        "alert_id": alert.alert_id,
-        "person_name": alert.person_name,
-        "status": alert.status,
-        "description": alert.description,
-        "photo_url": alert.photo_url,
-    }
+        return {}
+    return alert_to_incident_shape(alert)
 
 
 def _message_shape(msg: InboundMessage) -> dict:
@@ -159,9 +158,12 @@ async def _compose_suggestion_resolved_event(payload: str) -> Optional[dict]:
 async def ws_stream(websocket: WebSocket):
     await websocket.accept()
     bus = PostgresEventBus(get_engine())
+    closed = asyncio.Event()
 
     async def listen(channel: str):
         async for payload in bus.subscribe(channel):
+            if closed.is_set():
+                return
             try:
                 evt: Optional[dict] = None
                 if channel == "new_inbound":
@@ -176,29 +178,42 @@ async def ws_stream(websocket: WebSocket):
                     evt = await _compose_suggestion_pending_event(payload)
                 elif channel == "suggestion_resolved":
                     evt = await _compose_suggestion_resolved_event(payload)
-                # bucket_open / toolcalls_pending / suggestions_pending are
-                # internal pipeline notifications; the UI sees them via the
-                # higher-level events above.
                 if evt:
                     await websocket.send_json(evt)
-            except Exception as exc:
-                logger.warning("ws_stream(%s): error: %s", channel, exc)
+            except (WebSocketDisconnect, RuntimeError):
+                # Client gone — flag every listener to bail.
+                closed.set()
+                return
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("ws_stream(%s): %s", channel, exc)
+
+    async def heartbeat():
+        """Detect a silently-dead client by reading from it; raises on disconnect."""
+        try:
+            while not closed.is_set():
+                await websocket.receive_text()
+        except WebSocketDisconnect:
+            closed.set()
+        except Exception:  # noqa: BLE001
+            closed.set()
 
     tasks = [
-        asyncio.create_task(listen("new_inbound")),
-        asyncio.create_task(listen("incident_upserted")),
-        asyncio.create_task(listen("agent_thinking")),
-        asyncio.create_task(listen("decision_made")),
-        asyncio.create_task(listen("suggestion_pending")),
-        asyncio.create_task(listen("suggestion_resolved")),
+        asyncio.create_task(listen(c)) for c in (
+            "new_inbound", "incident_upserted",
+            "agent_thinking", "decision_made",
+            "suggestion_pending", "suggestion_resolved",
+        )
     ]
+    tasks.append(asyncio.create_task(heartbeat()))
     try:
-        await asyncio.gather(*tasks)
+        # Wait until the close flag is set (any listener saw the disconnect).
+        await closed.wait()
     except WebSocketDisconnect:
         pass
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.warning("ws_stream: %s", exc)
     finally:
+        closed.set()
         for t in tasks:
             t.cancel()
         try:

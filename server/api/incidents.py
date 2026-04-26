@@ -36,6 +36,36 @@ def _region_for_prefix(prefix: str | None) -> str:
     return _DEFAULT_REGION
 
 
+def alert_to_incident_shape(alert: Alert | None) -> dict[str, Any]:
+    """Camel-case Incident shape matching what GET /api/incidents returns.
+
+    Used by the WebSocket layer so the store can upsert incidents from WS
+    events without a shape translation step. Aggregate fields the list
+    endpoint computes (messageCount, lastActivity) are 0 / null here —
+    the frontend can fall back to a refetch if it needs them.
+    """
+    if alert is None:
+        return {}
+    region_key = _region_for_prefix(alert.region_geohash_prefix)
+    meta = REGIONS[region_key]
+    return {
+        "id": alert.alert_id,
+        "category": alert.category or "other",
+        "title": alert.person_name or (alert.description or "")[:80],
+        "severity": _severity(alert.urgency_tier),
+        "region": region_key,
+        "lat": float(meta["lat"]),
+        "lon": float(meta["lon"]),
+        "details": {
+            "description": alert.description,
+            "last_seen_geohash": alert.last_seen_geohash,
+            "expires_at": alert.expires_at.isoformat() if alert.expires_at else None,
+        },
+        "messageCount": 0,
+        "lastActivity": None,
+    }
+
+
 @router.get("/incidents")
 async def list_incidents(
     _op: Annotated[dict[str, Any], Depends(current_operator)],
