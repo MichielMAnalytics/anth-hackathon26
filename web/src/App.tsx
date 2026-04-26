@@ -11,7 +11,6 @@ import {
 } from "./lib/api";
 import { OperatorSwitcher } from "./components/OperatorSwitcher";
 import { LiveIndicator } from "./components/LiveIndicator";
-import { AgentNowPlaying } from "./components/AgentNowPlaying";
 import { useStore } from "./lib/store";
 import { navigate, useRoute, type Route } from "./lib/router";
 import { DashboardView } from "./pages/DashboardView";
@@ -100,7 +99,6 @@ export function App() {
 
   return (
     <div className="h-full flex flex-col bg-surface-100 text-ink-900">
-      <AgentNowPlaying />
       <header className="h-14 border-b border-surface-300 bg-white px-4 sm:px-8 flex items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-3 sm:gap-8 min-w-0">
           <button

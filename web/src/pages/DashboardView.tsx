@@ -14,6 +14,7 @@ import type {
 import { RegionCard } from "../components/dashboard/RegionCard";
 import { RecentDistress } from "../components/dashboard/RecentDistress";
 import { SendModal } from "../components/send/SendModal";
+import { AgentNowPlaying } from "../components/AgentNowPlaying";
 
 interface PreparedSend {
   mode: SendMode;
@@ -224,6 +225,19 @@ export function DashboardView() {
       <aside className="md:border-l border-t md:border-t-0 border-surface-300 bg-white md:overflow-y-auto md:max-h-full">
         <div className="px-6 py-8 sm:py-10 space-y-5">
           <div>
+            <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-500">
+              /// Now playing
+            </div>
+            <h2 className="font-display text-[22px] leading-tight font-semibold text-ink-900 tracking-tighter mt-2">
+              Agent at work
+            </h2>
+            <p className="text-[12.5px] text-ink-500 mt-1.5 leading-snug">
+              Live status of the matching engine — what it's reading, what it just decided.
+            </p>
+          </div>
+          <AgentNowPlaying />
+
+          <div className="pt-4 border-t border-surface-300">
             <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-500">
               /// The wire
             </div>

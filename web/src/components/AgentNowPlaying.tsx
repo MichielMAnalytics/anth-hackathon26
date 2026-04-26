@@ -2,19 +2,20 @@ import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 
 /**
- * AgentNowPlaying — visible proof that the agent is working *right now*.
+ * AgentNowPlaying — a card sized for the right-rail above "The Wire".
  *
  * Phases:
- *   idle      — nothing happening; subtle "Agent ready" placeholder
- *   thinking  — agent has claimed a bucket; pulsing dot + "Thinking on …"
- *   decided   — agent finished; show narration + cost + turns; auto-collapse
- *               back to idle after AUTO_DISMISS_MS
+ *   idle      — subtle "Agent · idle" placeholder
+ *   thinking  — pulsing brand card "Reading the bucket for Aleppo
+ *               — Tamar… (2.3s)" while the multi-turn loop runs
+ *   decided   — green card with the narration + model + turns + cost;
+ *               auto-collapses to idle after AUTO_DISMISS_MS
  *
- * Self-contained: opens its own /ws/stream connection so it doesn't depend
- * on the App's existing WS callback. Reconnects on close.
+ * Self-contained: opens its own /ws/stream connection. Reconnects on
+ * close. Never collides with the App's existing stream callback.
  */
 
-const AUTO_DISMISS_MS = 6000;
+const AUTO_DISMISS_MS = 7000;
 
 interface ThinkingState {
   phase: "thinking";
@@ -43,18 +44,18 @@ type State =
   | ThinkingState
   | DecidedState;
 
+const REGION_LABELS: Record<string, string> = {
+  sv8d: "Baghdad",
+  sv3p: "Mosul",
+  sy7q: "Aleppo",
+  sv5t: "Damascus",
+  s87w: "Sanaa",
+  sv9j: "Beirut",
+};
+
 function regionLabel(prefix: string | null | undefined): string {
   if (!prefix) return "—";
-  // map a couple of common geohash prefixes to friendly names; fallback to raw
-  const map: Record<string, string> = {
-    sv8d: "Baghdad",
-    sv3p: "Mosul",
-    sy7q: "Aleppo",
-    sv5t: "Damascus",
-    s87w: "Sanaa",
-    sv9j: "Beirut",
-  };
-  return map[prefix] ?? prefix;
+  return REGION_LABELS[prefix] ?? prefix;
 }
 
 function elapsed(startMs: number): string {
@@ -81,7 +82,6 @@ export function AgentNowPlaying() {
     return () => window.clearInterval(id);
   }, [state.phase]);
 
-  // Auto-dismiss the "decided" card after a delay.
   useEffect(() => {
     if (state.phase !== "decided") return;
     dismissRef.current = window.setTimeout(() => {
@@ -96,7 +96,6 @@ export function AgentNowPlaying() {
     };
   }, [state.phase, "decidedAt" in state ? state.decidedAt : 0]);
 
-  // Open an independent WS just for agent telemetry. Reconnects on close.
   useEffect(() => {
     const proto = window.location.protocol === "https:" ? "wss" : "ws";
     const url = `${proto}://${window.location.host}/ws/stream`;
@@ -146,27 +145,23 @@ export function AgentNowPlaying() {
     };
   }, []);
 
-  // ---------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------
+  // -----------------------------------------------------------------
+  // Render — card sized for the right rail
+  // -----------------------------------------------------------------
 
-  // Top-right, below the 56px header (h-14 = top-14 + 0.5rem buffer).
   const baseClass =
-    "fixed top-[64px] right-3 z-[1100] w-[340px] rounded-lg border shadow-modal overflow-hidden " +
-    "transition-all duration-300";
+    "rounded-md border px-4 py-3 transition-colors duration-300";
 
   if (state.phase === "idle") {
     return (
-      <div
-        className={clsx(
-          baseClass,
-          "bg-white border-surface-300 px-4 py-2.5",
-        )}
-      >
+      <div className={clsx(baseClass, "bg-surface-50 border-surface-300")}>
         <div className="flex items-center gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-sev-low/60 shrink-0" />
-          <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-400">
+          <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-400">
             Agent · idle
+          </span>
+          <span className="ml-auto font-mono text-[10px] uppercase tracking-[0.14em] text-ink-300">
+            standing by
           </span>
         </div>
       </div>
@@ -175,22 +170,17 @@ export function AgentNowPlaying() {
 
   if (state.phase === "thinking") {
     return (
-      <div
-        className={clsx(
-          baseClass,
-          "bg-white border-brand-600 px-4 py-3",
-        )}
-      >
+      <div className={clsx(baseClass, "bg-white border-brand-600")}>
         <div className="flex items-center gap-2 mb-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-brand-600 animate-pulse-dot shrink-0" />
-          <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-brand-600">
+          <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-brand-600">
             Agent · thinking
           </span>
           <span className="ml-auto font-mono text-[10px] tabular-nums text-ink-400">
             {elapsed(state.startedAt)}
           </span>
         </div>
-        <div className="text-sm text-ink-900 leading-snug">
+        <div className="text-[13px] text-ink-900 leading-snug">
           Reading the bucket for{" "}
           <span className="font-medium">{regionLabel(state.regionPrefix)}</span>
           {state.personName ? (
@@ -209,24 +199,18 @@ export function AgentNowPlaying() {
   }
 
   // decided
-  const region = regionLabel(state.regionPrefix);
   return (
-    <div
-      className={clsx(
-        baseClass,
-        "bg-white border-sev-low px-4 py-3",
-      )}
-    >
+    <div className={clsx(baseClass, "bg-white border-sev-low")}>
       <div className="flex items-center gap-2 mb-1.5">
         <span className="w-1.5 h-1.5 rounded-full bg-sev-low shrink-0" />
-        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-sev-low">
+        <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-sev-low">
           Agent · decided
         </span>
         <span className="ml-auto font-mono text-[10px] tabular-nums text-ink-400">
-          {region}
+          {regionLabel(state.regionPrefix)}
         </span>
       </div>
-      <div className="text-sm text-ink-900 leading-snug">
+      <div className="text-[13px] text-ink-900 leading-snug">
         {state.narration}
       </div>
       <div className="mt-2 flex items-center gap-3 font-mono text-[10px] text-ink-400 tabular-nums">
