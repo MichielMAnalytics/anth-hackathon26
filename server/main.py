@@ -20,6 +20,7 @@ from server.api.operators import router as operators_router
 from server.api.regions import router as regions_router
 from server.api.sim import router as sim_router
 from server.api.suggestions import router as suggestions_router
+from server.api.webhooks import router as webhooks_router
 from server.api.ws import router as ws_router
 from server.db.engine import get_engine, get_session_maker
 from server.eventbus.postgres import PostgresEventBus
@@ -137,6 +138,7 @@ app.include_router(suggestions_router)
 app.include_router(agent_feed_router)
 app.include_router(dashboard_router)
 app.include_router(sim_router)
+app.include_router(webhooks_router)
 app.include_router(ws_router)
 
 
@@ -158,7 +160,7 @@ _INDEX_HTML = _WEB_DIST / "index.html"
 if _WEB_DIST.is_dir():
     app.mount("/", StaticFiles(directory=_WEB_DIST, html=True), name="spa")
 
-    _NON_SPA_PREFIXES = ("/api", "/ws", "/health", "/assets")
+    _NON_SPA_PREFIXES = ("/api", "/ws", "/health", "/assets", "/webhooks")
 
     @app.exception_handler(StarletteHTTPException)
     async def _spa_history_fallback(request: Request, exc: StarletteHTTPException):

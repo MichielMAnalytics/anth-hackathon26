@@ -16,23 +16,29 @@ This gives a unified audit trail across agent and operator actions.
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
+import logging
 from typing import Annotated, Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.api.auth_dep import current_operator
-from server.api.registry import AUDIENCES
+from server.api.registry import AUDIENCES, REGIONS
 from server.db.alerts import Alert
 from server.db.decisions import ToolCall
-from server.db.engine import get_engine
+from server.db.engine import get_engine, get_session_maker
+from server.db.identity import Account
 from server.db.outbound import OutboundMessage
 from server.db.session import get_db
 from server.eventbus.postgres import PostgresEventBus
+from server.integrations import twilio_sms
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
 
@@ -72,6 +78,144 @@ def _ack(audience: dict[str, Any], channel: str, mode: str) -> dict[str, Any]:
             f"Operator {mode} queued for {queued:,} recipients via {channel}"
         ),
     }
+
+
+async def _resolve_recipients(
+    db: AsyncSession,
+    *,
+    audience: dict[str, Any],
+    region: Optional[str],
+    ngo_id: str,
+) -> list[str]:
+    """Pick the phones we'd actually SMS for this audience + region."""
+    # Demo override: trial Twilio accounts can only message verified numbers.
+    demo = twilio_sms.demo_recipient()
+    if demo:
+        return [demo]
+
+    stmt = select(Account.phone).where(
+        Account.ngo_id == ngo_id,
+        Account.opted_out.is_(False),
+    )
+
+    aud_id = audience.get("id")
+    if aud_id == "baghdad_residents":
+        prefix = REGIONS["IRQ_BAGHDAD"]["geohash_prefix"]
+        stmt = stmt.where(Account.home_geohash.like(f"{prefix}%"))
+    elif region and region in REGIONS:
+        prefix = REGIONS[region]["geohash_prefix"]
+        stmt = stmt.where(
+            (Account.home_geohash.like(f"{prefix}%"))
+            | (Account.last_known_geohash.like(f"{prefix}%"))
+        )
+
+    cap = twilio_sms.max_recipients()
+    stmt = stmt.limit(cap)
+    rows = (await db.execute(stmt)).scalars().all()
+    return [p for p in rows if p]
+
+
+async def _fanout_sms(
+    *,
+    placeholder_out_id: str,
+    tool_call_id: str,
+    ngo_id: str,
+    audience: dict[str, Any],
+    region: Optional[str],
+    body: str,
+) -> None:
+    """Background fan-out: send SMS per recipient + roll status up.
+
+    Runs after the request has been ack'd, on a fresh DB session.
+    """
+    sm = get_session_maker()
+    try:
+        async with sm() as db:
+            phones = await _resolve_recipients(
+                db, audience=audience, region=region, ngo_id=ngo_id
+            )
+
+        if not phones:
+            logger.info(
+                "fanout: no recipients for audience=%s region=%s — placeholder stays queued",
+                audience.get("id"),
+                region,
+            )
+            return
+
+        live = twilio_sms.is_configured()
+        results = await asyncio.gather(
+            *[twilio_sms.send_sms(p, body) for p in phones],
+            return_exceptions=True,
+        )
+
+        sent = 0
+        failed = 0
+        async with sm() as db:
+            for phone, res in zip(phones, results):
+                if isinstance(res, Exception):
+                    status = "failed"
+                    sid = None
+                    error = str(res)
+                else:
+                    status = res.status
+                    sid = res.sid
+                    error = res.error
+                if status in ("sent", "queued", "delivered", "accepted"):
+                    sent += 1
+                elif status == "stub":
+                    pass  # not counted as real delivery
+                else:
+                    failed += 1
+
+                db.add(
+                    OutboundMessage(
+                        ngo_id=ngo_id,
+                        tool_call_id=tool_call_id,
+                        recipient_phone=phone,
+                        channel="sms",
+                        body=body,
+                        language="en",
+                        status=status,
+                        provider_msg_id=sid,
+                        error=error,
+                        previous_out_id=placeholder_out_id,
+                    )
+                )
+
+            # Roll the per-recipient outcome up into the placeholder + tool call.
+            placeholder_status = (
+                "sent"
+                if sent and not failed
+                else "partial"
+                if sent and failed
+                else "failed"
+                if failed
+                else "stub"
+                if not live
+                else "queued"
+            )
+            await db.execute(
+                update(OutboundMessage)
+                .where(OutboundMessage.out_id == placeholder_out_id)
+                .values(status=placeholder_status)
+            )
+            await db.execute(
+                update(ToolCall)
+                .where(ToolCall.call_id == tool_call_id)
+                .values(status="ok" if placeholder_status in ("sent", "stub", "queued", "partial") else "failed")
+            )
+            await db.commit()
+
+        logger.info(
+            "fanout: out=%s sent=%s failed=%s live=%s",
+            placeholder_out_id,
+            sent,
+            failed,
+            live,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("fanout: unexpected error: %s", exc)
 
 
 async def _publish_incident_upserted(alert_id: Optional[str]) -> None:
@@ -170,10 +314,38 @@ async def _persist_send(
     return tc, out, alert
 
 
+def _should_send_sms(channel: str) -> bool:
+    return channel in ("sms", "fallback")
+
+
+def _schedule_fanout(
+    bg: BackgroundTasks,
+    *,
+    channel: str,
+    placeholder: OutboundMessage,
+    tool_call: ToolCall,
+    audience: dict[str, Any],
+    region: Optional[str],
+    body: str,
+) -> None:
+    if not _should_send_sms(channel):
+        return
+    bg.add_task(
+        _fanout_sms,
+        placeholder_out_id=placeholder.out_id,
+        tool_call_id=tool_call.call_id,
+        ngo_id=placeholder.ngo_id,
+        audience=audience,
+        region=region,
+        body=body,
+    )
+
+
 @router.post("/alerts")
 async def post_alert(
     payload: BroadcastBody,
     operator: Annotated[dict[str, Any], Depends(current_operator)],
+    bg: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     audience = _AUDIENCE_INDEX.get(payload.audienceId)
@@ -188,7 +360,7 @@ async def post_alert(
             "reason": "Junior operators cannot broadcast amber alerts.",
         }
 
-    _, _, alert = await _persist_send(
+    tc, out, alert = await _persist_send(
         db,
         operator=operator,
         audience=audience,
@@ -200,6 +372,15 @@ async def post_alert(
         attachments=payload.attachments,
     )
     await db.commit()
+    _schedule_fanout(
+        bg,
+        channel=payload.channels,
+        placeholder=out,
+        tool_call=tc,
+        audience=audience,
+        region=payload.region,
+        body=payload.body,
+    )
     await _publish_incident_upserted(alert.alert_id if alert else None)
     return _ack(audience, payload.channels, "alert")
 
@@ -208,13 +389,14 @@ async def post_alert(
 async def post_request(
     payload: BroadcastBody,
     operator: Annotated[dict[str, Any], Depends(current_operator)],
+    bg: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     audience = _AUDIENCE_INDEX.get(payload.audienceId)
     if audience is None:
         raise HTTPException(status_code=400, detail="unknown audience")
 
-    _, _, alert = await _persist_send(
+    tc, out, alert = await _persist_send(
         db,
         operator=operator,
         audience=audience,
@@ -226,6 +408,15 @@ async def post_request(
         attachments=payload.attachments,
     )
     await db.commit()
+    _schedule_fanout(
+        bg,
+        channel=payload.channels,
+        placeholder=out,
+        tool_call=tc,
+        audience=audience,
+        region=payload.region,
+        body=payload.body,
+    )
     await _publish_incident_upserted(alert.alert_id if alert else None)
     return _ack(audience, payload.channels, "request")
 
@@ -235,6 +426,7 @@ async def post_case_message(
     incident_id: str,
     payload: CaseMessageBody,
     operator: Annotated[dict[str, Any], Depends(current_operator)],
+    bg: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     audience = (
@@ -245,7 +437,7 @@ async def post_case_message(
     if audience is None:
         raise HTTPException(status_code=400, detail="unknown audience")
 
-    _, _, alert = await _persist_send(
+    tc, out, alert = await _persist_send(
         db,
         operator=operator,
         audience=audience,
@@ -257,5 +449,14 @@ async def post_case_message(
         attachments={},
     )
     await db.commit()
+    _schedule_fanout(
+        bg,
+        channel=payload.via,
+        placeholder=out,
+        tool_call=tc,
+        audience=audience,
+        region=None,
+        body=payload.body,
+    )
     await _publish_incident_upserted(alert.alert_id if alert else None)
     return {"ok": True, "broadcast": _ack(audience, payload.via, "case")}

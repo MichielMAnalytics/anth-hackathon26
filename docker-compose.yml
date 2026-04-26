@@ -34,6 +34,12 @@ services:
       SEED_ON_BOOT: ${SEED_ON_BOOT:-true}
       REPLAY_AUTOSTART: ${REPLAY_AUTOSTART:-true}
       REPLAY_INTERVAL_SEC: ${REPLAY_INTERVAL_SEC:-4}
+      # Twilio SMS — leave blank to keep operator sends in stub mode.
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
+      TWILIO_DEMO_RECIPIENT: ${TWILIO_DEMO_RECIPIENT:-}
+      TWILIO_MAX_RECIPIENTS: ${TWILIO_MAX_RECIPIENTS:-25}
     ports: ["8080:8080"]
 
 volumes:

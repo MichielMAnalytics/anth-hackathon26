@@ -171,6 +171,8 @@ async def incident_messages(
         })
 
     # Agent-issued outbounds: linked to an AgentDecision via Bucket.alert_id.
+    # Per-recipient delivery rows carry previous_out_id; we want the
+    # parent broadcast row only, so the timeline shows one bubble per send.
     agent_outbound_rows = (
         await db.execute(
             select(OutboundMessage)
@@ -178,6 +180,7 @@ async def incident_messages(
             .join(AgentDecision, ToolCall.decision_id == AgentDecision.decision_id)
             .join(Bucket, AgentDecision.bucket_key == Bucket.bucket_key)
             .where(Bucket.alert_id == incident_id)
+            .where(OutboundMessage.previous_out_id.is_(None))
         )
     ).scalars().all()
 
@@ -189,6 +192,7 @@ async def incident_messages(
             .join(ToolCall, OutboundMessage.tool_call_id == ToolCall.call_id)
             .where(ToolCall.decision_id.is_(None))
             .where(ToolCall.args["incident_id"].astext == incident_id)
+            .where(OutboundMessage.previous_out_id.is_(None))
         )
     ).scalars().all()
 
