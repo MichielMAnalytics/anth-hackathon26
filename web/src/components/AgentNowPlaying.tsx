@@ -150,8 +150,9 @@ export function AgentNowPlaying() {
   // Render
   // ---------------------------------------------------------------------
 
+  // Top-right, below the 56px header (h-14 = top-14 + 0.5rem buffer).
   const baseClass =
-    "fixed top-3 right-3 z-[1100] w-[340px] rounded-lg border shadow-modal overflow-hidden " +
+    "fixed top-[64px] right-3 z-[1100] w-[340px] rounded-lg border shadow-modal overflow-hidden " +
     "transition-all duration-300";
 
   if (state.phase === "idle") {
