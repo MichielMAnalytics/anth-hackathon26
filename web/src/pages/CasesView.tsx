@@ -6,6 +6,8 @@ import { CaseThread } from "../components/CaseThread";
 import { DetailPanel } from "../components/detail/DetailPanel";
 import { CaseMiniMap } from "../components/CaseMiniMap";
 import { SendModal } from "../components/send/SendModal";
+import { CreateCaseModal } from "../components/CreateCaseModal";
+import { EditCaseModal } from "../components/EditCaseModal";
 import type { SendMode } from "../lib/types";
 
 type MobilePane = "list" | "thread" | "profile";
@@ -19,6 +21,8 @@ export function CasesView() {
   const audiences = useStore((s) => s.audiences);
   const selectIncident = useStore((s) => s.selectIncident);
   const [sendMode, setSendMode] = useState<SendMode | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   // Mobile-only nav state. On md+ all panes are visible regardless.
   const [mobilePane, setMobilePane] = useState<MobilePane>("list");
   // md+ profile rail collapse state. Default open on every mount; persists for
@@ -49,9 +53,9 @@ export function CasesView() {
     >
       <aside
         className={clsx(
-          "border-r border-surface-300 bg-surface-50 min-h-0 h-full",
-          "md:block",
-          showList ? "block" : "hidden md:block",
+          "border-r border-surface-300 bg-surface-50 min-h-0 h-full flex flex-col",
+          "md:flex",
+          showList ? "flex" : "hidden md:flex",
         )}
         onClick={() => {
           // mobile: when the user clicks a case, the IncidentList already
@@ -59,7 +63,21 @@ export function CasesView() {
           if (window.matchMedia("(max-width: 767px)").matches) openCase();
         }}
       >
-        <IncidentList region={region} issue={issue} />
+        <div className="px-3 py-2 border-b border-surface-300 bg-white flex-shrink-0">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setCreateOpen(true);
+            }}
+            className="w-full px-3 py-2 text-sm font-semibold rounded-sm bg-ink-900 text-white hover:bg-ink-800 transition flex items-center justify-center gap-1.5"
+          >
+            <span className="text-base leading-none">+</span> Create case
+          </button>
+        </div>
+        <div className="flex-1 min-h-0 overflow-auto">
+          <IncidentList region={region} issue={issue} />
+        </div>
       </aside>
 
       <main
@@ -105,6 +123,7 @@ export function CasesView() {
             incident={incident}
             onAlert={() => setSendMode("alert")}
             onRequest={() => setSendMode("request")}
+            onEdit={() => setEditOpen(true)}
             onCollapse={() => setProfileOpen(false)}
           />
         </aside>
@@ -145,6 +164,7 @@ export function CasesView() {
               incident={incident}
               onAlert={() => setSendMode("alert")}
               onRequest={() => setSendMode("request")}
+              onEdit={() => setEditOpen(true)}
             />
           </div>
         </div>
@@ -158,6 +178,12 @@ export function CasesView() {
           onClose={() => setSendMode(null)}
         />
       )}
+
+      {createOpen && <CreateCaseModal onClose={() => setCreateOpen(false)} />}
+
+      {editOpen && incident && (
+        <EditCaseModal incident={incident} onClose={() => setEditOpen(false)} />
+      )}
     </div>
   );
 }
@@ -166,11 +192,13 @@ function CaseProfile({
   incident,
   onAlert,
   onRequest,
+  onEdit,
   onCollapse,
 }: {
   incident: ReturnType<typeof useStore.getState>["incidents"][string] | null;
   onAlert: () => void;
   onRequest: () => void;
+  onEdit: () => void;
   onCollapse?: () => void;
 }) {
   if (!incident) {
@@ -206,6 +234,14 @@ function CaseProfile({
             {incident.title}
           </div>
         </div>
+        <button
+          type="button"
+          onClick={onEdit}
+          className="px-2.5 py-1 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-700 border border-surface-300 rounded-sm hover:bg-surface-100 hover:border-ink-400 transition shrink-0"
+          aria-label="Edit case and push update"
+        >
+          Edit
+        </button>
         {onCollapse && <CollapseButton onClick={onCollapse} />}
       </div>
       <div className="flex-1 overflow-y-auto p-5 space-y-6">

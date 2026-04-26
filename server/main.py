@@ -12,6 +12,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from server.api.agent_feed import router as agent_feed_router
 from server.api.audiences import router as audiences_router
+from server.api.civilian import router as civilian_router
 from server.api.dashboard import router as dashboard_router
 from server.api.health import router as health_router
 from server.api.incidents import router as incidents_router
@@ -140,6 +141,7 @@ app.include_router(dashboard_router)
 app.include_router(sim_router)
 app.include_router(webhooks_router)
 app.include_router(ws_router)
+app.include_router(civilian_router)
 
 
 # ---------------------------------------------------------------------------

@@ -1,18 +1,23 @@
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.api.auth_dep import current_operator
 from server.api.registry import REGIONS
 from server.db.alerts import Alert
+from server.db.base import generate_ulid
 from server.db.decisions import AgentDecision, ToolCall
+from server.db.engine import get_engine
+from server.db.identity import NGO, get_or_create_default_ngo
 from server.db.messages import Bucket, InboundMessage, TriagedMessage
 from server.db.outbound import OutboundMessage
 from server.db.session import get_db
+from server.eventbus.postgres import PostgresEventBus
 
 router = APIRouter(prefix="/api")
 
@@ -216,3 +221,123 @@ async def incident_messages(
 
     messages.sort(key=lambda m: m["ts"])
     return messages
+
+
+# ---------------------------------------------------------------------------
+# POST /api/incidents — operator creates a case from the dashboard.
+# ---------------------------------------------------------------------------
+#
+# Inserts an `Alert` row and publishes an `incident_upserted` event so the
+# WS-connected dashboards live-update. The civilian app picks it up either
+# via its polled `GET /v1/alerts/active` (cold start) or its WS stream
+# (live).
+
+_VALID_CATEGORIES = {
+    "missing_person",
+    "medical",
+    "resource_shortage",
+    "safety",
+}
+
+_VALID_URGENCY_TIERS = {"low", "medium", "high", "critical"}
+
+
+class CreateIncidentBody(BaseModel):
+    person_name: str = Field(..., min_length=1, max_length=200)
+    description: str = Field(..., min_length=1)
+    region: str = Field(..., description="Region key from REGIONS, e.g. SYR_ALEPPO")
+    category: Literal["missing_person", "medical", "resource_shortage", "safety"]
+    urgency_tier: Optional[Literal["low", "medium", "high", "critical"]] = "medium"
+
+
+class UpdateIncidentBody(BaseModel):
+    """Partial update — every field is optional. Send only what changes."""
+
+    description: Optional[str] = Field(None, min_length=1)
+    urgency_tier: Optional[Literal["low", "medium", "high", "critical"]] = None
+    status: Optional[Literal["active", "resolved", "archived"]] = None
+
+
+@router.patch("/incidents/{incident_id}")
+async def update_incident(
+    incident_id: str,
+    body: UpdateIncidentBody,
+    _op: Annotated[dict[str, Any], Depends(current_operator)],
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    alert = (
+        await db.execute(select(Alert).where(Alert.alert_id == incident_id))
+    ).scalar_one_or_none()
+    if alert is None:
+        raise HTTPException(status_code=404, detail="incident not found")
+
+    if body.description is not None:
+        alert.description = body.description
+    if body.urgency_tier is not None:
+        alert.urgency_tier = body.urgency_tier
+        alert.urgency_score = {
+            "low": 0.25,
+            "medium": 0.5,
+            "high": 0.75,
+            "critical": 0.95,
+        }[body.urgency_tier]
+    if body.status is not None:
+        alert.status = body.status
+
+    await db.commit()
+
+    # Same pipe as create — incident_upserted travels through ws.py to the
+    # dashboard and through civilian.py /v1/stream as ALERT_ISSUED, so the
+    # iOS card upserts in place via case_id.
+    bus = PostgresEventBus(get_engine())
+    await bus.publish("incident_upserted", alert.alert_id)
+
+    return alert_to_incident_shape(alert) | {"messageCount": 0, "lastActivity": None}
+
+
+@router.post("/incidents", status_code=201)
+async def create_incident(
+    body: CreateIncidentBody,
+    _op: Annotated[dict[str, Any], Depends(current_operator)],
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    if body.region not in REGIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"unknown region '{body.region}'. Known: {sorted(REGIONS.keys())}",
+        )
+    region_meta = REGIONS[body.region]
+
+    try:
+        ngo = await get_or_create_default_ngo(db)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    urgency_score = {
+        "low": 0.25,
+        "medium": 0.5,
+        "high": 0.75,
+        "critical": 0.95,
+    }.get(body.urgency_tier or "medium", 0.5)
+
+    alert = Alert(
+        alert_id=generate_ulid(),
+        ngo_id=ngo.ngo_id,
+        person_name=body.person_name,
+        description=body.description,
+        region_geohash_prefix=region_meta["geohash_prefix"],
+        last_seen_geohash=region_meta["geohash_prefix"],
+        status="active",
+        category=body.category,
+        urgency_tier=body.urgency_tier or "medium",
+        urgency_score=urgency_score,
+    )
+    db.add(alert)
+    await db.commit()
+
+    # Wakes the WS layer (`_compose_incident_event`) and triggers the
+    # civilian-side ALERT_ISSUED push.
+    bus = PostgresEventBus(get_engine())
+    await bus.publish("incident_upserted", alert.alert_id)
+
+    return alert_to_incident_shape(alert) | {"messageCount": 0, "lastActivity": None}
