@@ -236,8 +236,8 @@ def make_agent_options() -> Any:
         permission_mode="bypassPermissions",
         max_turns=8,
         max_budget_usd=0.50,
-        model="claude-sonnet-4-5",
-        fallback_model="claude-opus-4-1",
+        model="claude-opus-4-7",
+        fallback_model="claude-sonnet-4-6",
         enable_file_checkpointing=False,
         hooks={
             "PreToolUse": [HookMatcher(matcher="mcp__matching__*", hooks=[_idempotency_hook])],
@@ -360,7 +360,7 @@ async def real_decide(ctx: AgentContext, scope: DecisionScope, client: Any) -> d
 
         summary = (result.result if result and hasattr(result, "result") else None) or "agent decision"
         return {
-            "model": "claude-sonnet-4-5",
+            "model": "claude-opus-4-7",
             "reasoning_summary": summary,
             "turns": turns,
             "total_turns": result.num_turns if result else len(turns),

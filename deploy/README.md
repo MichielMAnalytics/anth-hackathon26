@@ -115,7 +115,7 @@ curl -s http://localhost:8080/api/decisions/recent?limit=1 \
   -H "X-Operator-Id: op-senior" | python3 -m json.tool | head -20
 ```
 
-If `model` reads `claude-sonnet-4-5` and `costUsd > 0`, you're real-mode.
+If `model` reads `claude-opus-4-7` and `costUsd > 0`, you're real-mode.
 If it reads `stub` and `costUsd == 0`, the key didn't reach the container.
 
 ### Where to get the key

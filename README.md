@@ -199,7 +199,7 @@ cd web && npm install && npm run dev
 
 **Triage worker (`server/workers/triage.py`).** Bare `anthropic` SDK; one `messages.create()` per message with a single tool to enforce JSON-schema output. Model `claude-haiku-4-5-20251001`. Falls back to a deterministic stub when `ANTHROPIC_API_KEY` is unset. Output: `TriagedMessage` row + `Bucket(status='open')` upsert + `bucket_open` notify.
 
-**Agent worker (`server/workers/agent.py`).** `claude-agent-sdk` ≥ 0.1.68. One persistent `ClaudeSDKClient` per worker. `setting_sources=[]`, `permission_mode="bypassPermissions"`, `max_turns=8`, `max_budget_usd=0.50`, model `claude-sonnet-4-5` / fallback `claude-opus-4-1`. All 14 matching-engine tools registered as an in-process MCP server via `create_sdk_mcp_server`. Stub mode synthesizes a deterministic decision when no API key is set. Per-decision flow:
+**Agent worker (`server/workers/agent.py`).** `claude-agent-sdk` ≥ 0.1.68. One persistent `ClaudeSDKClient` per worker. `setting_sources=[]`, `permission_mode="bypassPermissions"`, `max_turns=8`, `max_budget_usd=0.50`, model `claude-opus-4-7` / fallback `claude-sonnet-4-6`. All 14 matching-engine tools registered as an in-process MCP server via `create_sdk_mcp_server`. Stub mode synthesizes a deterministic decision when no API key is set. Per-decision flow:
 
 1. Claim a `Bucket` (`FOR UPDATE SKIP LOCKED`).
 2. Acquire `pg_try_advisory_lock(hashtext(alert_id))`.

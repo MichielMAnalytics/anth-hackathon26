@@ -704,7 +704,7 @@ async def _seed_decisions_and_toolcalls(
         decision = AgentDecision(
             ngo_id=ngo.ngo_id,
             bucket_key=bucket_key,
-            model="claude-sonnet-4-5",
+            model="claude-opus-4-7",
             prompt_hash=hashlib.sha256(bucket_key.encode()).hexdigest(),
             reasoning_summary=summary,
             tool_calls=[{"name": c["tool_name"], "args": c["args"], "mode": c["mode"]}
