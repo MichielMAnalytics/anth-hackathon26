@@ -11,6 +11,7 @@ non-200, even when we silently swallow validation failures.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -18,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from server.db.alerts import REPLY_CODE_ALPHABET, REPLY_CODE_LEN, Alert
 from server.db.base import generate_ulid
 from server.db.engine import get_engine
 from server.db.identity import NGO, Account
@@ -28,6 +30,42 @@ from server.integrations import twilio_sms
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/webhooks")
+
+# Match a reply-code prefix at the start of an inbound SMS body. We accept
+# any of "-", "—", "–", ":" or just whitespace as the separator, and the
+# code itself is case-insensitive.
+_CODE_RE = re.compile(
+    rf"^\s*([{REPLY_CODE_ALPHABET}{REPLY_CODE_ALPHABET.lower()}]{{{REPLY_CODE_LEN}}})\s*[-–—:]?\s*(.*)$",
+    re.DOTALL,
+)
+
+
+async def _resolve_reply_code(
+    db: AsyncSession, ngo_id: str, body: str
+) -> tuple[Optional[str], str]:
+    """If body starts with a known reply code, return (alert_id, stripped_body).
+
+    Returns (None, original_body) when no code matches an active alert.
+    """
+    m = _CODE_RE.match(body)
+    if not m:
+        return None, body
+    code = m.group(1).upper()
+    rest = m.group(2).strip()
+    alert_id = (
+        await db.execute(
+            select(Alert.alert_id).where(
+                Alert.ngo_id == ngo_id,
+                Alert.reply_code == code,
+                Alert.status == "active",
+            )
+        )
+    ).scalar_one_or_none()
+    if alert_id is None:
+        return None, body
+    # Strip the prefix only when it actually matched a case — otherwise the
+    # original body might just happen to start with 4 letters.
+    return alert_id, rest or body
 
 _EMPTY_TWIML = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>'
 
@@ -114,6 +152,8 @@ async def twilio_inbound(
         logger.warning("twilio inbound: no NGO seeded — dropping inbound from %s", sender)
         return _twiml()
 
+    alert_id, body = await _resolve_reply_code(db, ngo_id, body)
+
     msg_id = generate_ulid()
     db.add(
         InboundMessage(
@@ -121,6 +161,7 @@ async def twilio_inbound(
             ngo_id=ngo_id,
             channel="sms",
             sender_phone=sender,
+            in_reply_to_alert_id=alert_id,
             body=body,
             media_urls=[],
             raw={"twilio": form},
@@ -135,5 +176,11 @@ async def twilio_inbound(
     except Exception as exc:  # noqa: BLE001
         logger.warning("twilio inbound: publish failed: %s", exc)
 
-    logger.info("twilio inbound: persisted msg=%s sid=%s from=%s", msg_id, sid, sender)
+    logger.info(
+        "twilio inbound: persisted msg=%s sid=%s from=%s case=%s",
+        msg_id,
+        sid,
+        sender,
+        alert_id or "-",
+    )
     return _twiml()

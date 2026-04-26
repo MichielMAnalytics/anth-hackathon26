@@ -23,7 +23,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.api.registry import REGIONS
-from server.db.alerts import Alert, AlertDelivery
+from server.db.alerts import Alert, AlertDelivery, random_reply_code
 from server.db.decisions import AgentDecision, ToolCall
 from server.db.identity import NGO, Account
 from server.db.knowledge import SightingCluster, Tag, TagAssignment, Trajectory
@@ -367,8 +367,17 @@ async def _create_alerts(
     db: AsyncSession, ngo: NGO, accounts_by_region: dict[str, list[Account]]
 ) -> list[Alert]:
     alerts: list[Alert] = []
+    used_codes: set[str] = set()
     for region_key, person_name, desc, category, tier, score, status, age_min in _ALERTS:
         meta = REGIONS[region_key]
+        reply_code = None
+        if status == "active":
+            for _ in range(40):
+                candidate = random_reply_code()
+                if candidate not in used_codes:
+                    used_codes.add(candidate)
+                    reply_code = candidate
+                    break
         alert = Alert(
             ngo_id=ngo.ngo_id,
             person_name=person_name,
@@ -376,6 +385,7 @@ async def _create_alerts(
             last_seen_geohash=meta["geohash_prefix"] + "u0",
             region_geohash_prefix=meta["geohash_prefix"],
             status=status,
+            reply_code=reply_code,
             category=category,
             urgency_tier=tier,
             urgency_score=score,

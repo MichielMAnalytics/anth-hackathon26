@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.api.auth_dep import current_operator
 from server.api.registry import REGIONS
-from server.db.alerts import Alert
+from server.db.alerts import Alert, generate_reply_code
 from server.db.base import generate_ulid
 from server.db.decisions import AgentDecision, ToolCall
 from server.db.engine import get_engine
@@ -61,6 +61,7 @@ def alert_to_incident_shape(alert: Alert | None) -> dict[str, Any]:
         "region": region_key,
         "lat": float(meta["lat"]),
         "lon": float(meta["lon"]),
+        "replyCode": alert.reply_code,
         "details": {
             "description": alert.description,
             "last_seen_geohash": alert.last_seen_geohash,
@@ -119,6 +120,7 @@ async def list_incidents(
             "region": region_key,
             "lat": float(meta["lat"]),
             "lon": float(meta["lon"]),
+            "replyCode": alert.reply_code,
             "details": {
                 "description": alert.description,
                 "last_seen_geohash": alert.last_seen_geohash,
@@ -320,6 +322,8 @@ async def create_incident(
         "critical": 0.95,
     }.get(body.urgency_tier or "medium", 0.5)
 
+    reply_code = await generate_reply_code(db, ngo.ngo_id)
+
     alert = Alert(
         alert_id=generate_ulid(),
         ngo_id=ngo.ngo_id,
@@ -328,6 +332,7 @@ async def create_incident(
         region_geohash_prefix=region_meta["geohash_prefix"],
         last_seen_geohash=region_meta["geohash_prefix"],
         status="active",
+        reply_code=reply_code,
         category=body.category,
         urgency_tier=body.urgency_tier or "medium",
         urgency_score=urgency_score,

@@ -46,6 +46,7 @@ export interface Incident {
   region: Region;
   lat?: number | null;
   lon?: number | null;
+  replyCode?: string | null;
   details: Record<string, unknown>;
   messageCount: number;
   lastActivity: string | null;

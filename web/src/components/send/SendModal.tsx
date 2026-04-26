@@ -71,7 +71,12 @@ function defaultAudienceFor(
 function defaultBody(mode: SendMode, incident: Incident): string {
   if (mode === "alert") {
     const d = incident.details as Record<string, string | undefined>;
-    return `AMBER ALERT — ${d.name ?? "missing person"} (${d.ageRange ?? "unknown age"}). Last seen: ${d.lastSeenLocation ?? "unknown"}. ${d.description ?? ""} If seen, reply to this number.`;
+    const desc = d.description?.trim();
+    const head = desc ? `AMBER ALERT — ${incident.title}. ${desc}` : `AMBER ALERT — ${incident.title}`;
+    const reply = incident.replyCode
+      ? `Reply: "${incident.replyCode} <your message>"`
+      : `Reply to this number if you have information.`;
+    return `${head}\n\n${reply}`;
   }
   const d = incident.details as Record<string, string | undefined>;
   if (incident.category === "medical") {

@@ -62,12 +62,15 @@ export function CaseThread() {
   const setMessages = useStore((s) => s.setMessages);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Refetch on selected change AND whenever the incident object changes
+  // (App.tsx calls upsertIncident for every WS event, replacing the
+  // reference). That covers inbound replies threading onto the case via
+  // `inbound_triaged`, outbound broadcasts via `incident_upserted`, and
+  // edits — without a separate per-event subscription here.
   useEffect(() => {
     if (!selectedId) return;
-    if (!useStore.getState().messagesByIncident[selectedId]) {
-      fetchMessages(selectedId).then((m) => setMessages(selectedId, m));
-    }
-  }, [selectedId, setMessages]);
+    fetchMessages(selectedId).then((m) => setMessages(selectedId, m));
+  }, [selectedId, incident, setMessages]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -114,6 +117,15 @@ export function CaseThread() {
             {REGION_LABEL[incident.region] ?? incident.region}
             <span className="text-surface-400"> · </span>
             <span className="text-ink-700">{incident.messageCount}</span> msg
+            {incident.replyCode && (
+              <>
+                <span className="text-surface-400"> · </span>
+                reply code{" "}
+                <span className="text-ink-900 font-semibold tracking-wider">
+                  {incident.replyCode}
+                </span>
+              </>
+            )}
           </div>
         </div>
       </div>
