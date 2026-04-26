@@ -14,6 +14,17 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PATH="/app/.venv/bin:${PATH}"
 
+# Node + Claude Code CLI: claude-agent-sdk spawns the CLI as a subprocess
+# in real mode. Without it, setting ANTHROPIC_API_KEY crashes the agent
+# worker with "ProcessError: Command failed with exit code 1" at connect().
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates gnupg \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && npm install -g @anthropic-ai/claude-code \
+    && apt-get purge -y --auto-remove curl gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY pyproject.toml uv.lock* ./
 RUN pip install --no-cache-dir uv && uv sync --no-dev --frozen
 
