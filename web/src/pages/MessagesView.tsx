@@ -63,7 +63,87 @@ type FeedEvent =
       totalTurns: number;
       latencyMs: number;
       incidentId: string | null;
+      toolCalls: { id: string; name: string; mode: string; approvalStatus?: string | null }[];
     };
+
+interface ToolMeta {
+  label: string;
+  blurb: string;
+  classes: string; // tailwind classes for chip background + text
+}
+
+const TOOL_META: Record<string, ToolMeta> = {
+  send: {
+    label: "Send broadcast",
+    blurb: "Pushes an SMS or in-app message to one person, a group, or a region.",
+    classes: "bg-brand-600/10 text-brand-600 border-brand-600/20",
+  },
+  record_sighting: {
+    label: "Record sighting",
+    blurb: "Logs a witness report (location + observer + confidence) against the case.",
+    classes: "bg-violet-100 text-violet-700 border-violet-200",
+  },
+  upsert_cluster: {
+    label: "Update cluster",
+    blurb: "Groups nearby sightings into a named cluster of activity.",
+    classes: "bg-amber-100 text-amber-700 border-amber-200",
+  },
+  merge_clusters: {
+    label: "Merge clusters",
+    blurb: "Collapses overlapping clusters into one.",
+    classes: "bg-amber-100 text-amber-700 border-amber-200",
+  },
+  upsert_trajectory: {
+    label: "Update trajectory",
+    blurb: "Connects clusters into a likely path of movement.",
+    classes: "bg-amber-100 text-amber-700 border-amber-200",
+  },
+  apply_tag: {
+    label: "Apply tag",
+    blurb: "Adds a structured tag (e.g. medical, evacuated) to the case.",
+    classes: "bg-sky-100 text-sky-700 border-sky-200",
+  },
+  remove_tag: {
+    label: "Remove tag",
+    blurb: "Removes a tag previously applied to the case.",
+    classes: "bg-sky-100 text-sky-700 border-sky-200",
+  },
+  categorize_alert: {
+    label: "Categorize alert",
+    blurb: "Suggests the case category (medical, missing person, etc).",
+    classes: "bg-sky-100 text-sky-700 border-sky-200",
+  },
+  escalate_to_ngo: {
+    label: "Escalate",
+    blurb: "Pushes the case up to a senior operator for human review.",
+    classes: "bg-sev-critical/10 text-sev-critical border-sev-critical/20",
+  },
+  mark_bad_actor: {
+    label: "Flag bad actor",
+    blurb: "Marks a sender as suspicious — quarantines their inputs.",
+    classes: "bg-sev-critical/10 text-sev-critical border-sev-critical/20",
+  },
+  update_alert_status: {
+    label: "Update status",
+    blurb: "Changes the case status (open / resolved / archived).",
+    classes: "bg-ink-100 text-ink-700 border-ink-200",
+  },
+  noop: {
+    label: "Stand by",
+    blurb: "No action needed — the agent decides to wait.",
+    classes: "bg-surface-200 text-ink-500 border-surface-300",
+  },
+};
+
+function toolMeta(name: string): ToolMeta {
+  return (
+    TOOL_META[name] ?? {
+      label: name,
+      blurb: "Tool call.",
+      classes: "bg-surface-200 text-ink-700 border-surface-300",
+    }
+  );
+}
 
 export function MessagesView() {
   const [data, setData] = useState<Dashboard | null>(null);
@@ -161,6 +241,7 @@ export function MessagesView() {
           });
         } else if (msg.type === "decision_made") {
           const d = msg.decision ?? {};
+          const calls = Array.isArray(d.toolCalls) ? d.toolCalls : [];
           push({
             kind: "decided",
             key: `dec:${d.id ?? Date.now()}`,
@@ -172,6 +253,12 @@ export function MessagesView() {
             totalTurns: d.totalTurns ?? 0,
             latencyMs: d.latencyMs ?? 0,
             incidentId: msg.alertId ?? null,
+            toolCalls: calls.map((c: any) => ({
+              id: c.id,
+              name: c.name,
+              mode: c.mode,
+              approvalStatus: c.approvalStatus ?? null,
+            })),
           });
         }
       };
@@ -323,32 +410,48 @@ export function MessagesView() {
 
           <div className="pt-4 border-t border-surface-300">
             <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-500">
-              /// How it works
+              /// Actions
             </div>
             <h3 className="font-display text-[16px] leading-tight font-semibold text-ink-900 tracking-tighter mt-2">
-              From message to decision
+              What the agent can do
             </h3>
+            <p className="text-[12px] text-ink-500 mt-1.5 leading-snug">
+              Solid chip = executed automatically. Dashed = staged as a
+              suggestion, waiting on a human.
+            </p>
           </div>
-          <ol className="space-y-3">
-            <Step
-              n={1}
-              dot="bg-ink-400"
-              title="Wire receives a message"
-              body="A civilian SMS lands and is geo-bucketed by region."
-            />
-            <Step
-              n={2}
-              dot="bg-brand-600"
-              title="Agent reads the bucket"
-              body="When activity crosses a threshold, the agent claims the bucket and runs a multi-turn loop."
-            />
-            <Step
-              n={3}
-              dot="bg-sev-low"
-              title="Decision lands"
-              body="It either stands by, queues a suggestion, or — with approval — sends a broadcast."
-            />
-          </ol>
+          <ul className="space-y-2.5">
+            {[
+              "send",
+              "record_sighting",
+              "upsert_cluster",
+              "merge_clusters",
+              "upsert_trajectory",
+              "apply_tag",
+              "categorize_alert",
+              "escalate_to_ngo",
+              "mark_bad_actor",
+              "update_alert_status",
+              "noop",
+            ].map((name) => {
+              const m = toolMeta(name);
+              return (
+                <li key={name} className="flex items-start gap-2.5">
+                  <span
+                    className={clsx(
+                      "shrink-0 mt-[2px] inline-flex items-center px-2 py-[3px] rounded-md border font-mono text-[10px] uppercase tracking-[0.14em] font-medium",
+                      m.classes,
+                    )}
+                  >
+                    {m.label}
+                  </span>
+                  <span className="text-[12px] text-ink-500 leading-snug">
+                    {m.blurb}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       </aside>
     </div>
@@ -479,7 +582,16 @@ function DecidedRow({
           {fmtTime(ev.ts)}
         </span>
       </div>
-      <div className="mt-1.5 text-[13px] text-ink-900 leading-snug">
+
+      {ev.toolCalls.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {ev.toolCalls.map((c) => (
+            <ToolChip key={c.id} name={c.name} mode={c.mode} status={c.approvalStatus ?? null} />
+          ))}
+        </div>
+      )}
+
+      <div className="mt-2 text-[13px] text-ink-900 leading-snug">
         {ev.narration}
       </div>
       <div className="mt-1.5 flex items-center gap-3 font-mono text-[10px] text-ink-400 tabular-nums">
@@ -493,33 +605,43 @@ function DecidedRow({
   );
 }
 
-function Step({
-  n,
-  dot,
-  title,
-  body,
+function ToolChip({
+  name,
+  mode,
+  status,
 }: {
-  n: number;
-  dot: string;
-  title: string;
-  body: string;
+  name: string;
+  mode: string;
+  status: string | null;
 }) {
+  const meta = toolMeta(name);
+  const isSuggest = mode === "suggest";
+  const pending = isSuggest && (status == null || status === "pending");
+  const approved = status === "approved";
+  const rejected = status === "rejected";
   return (
-    <li className="flex gap-3">
-      <div className="shrink-0 mt-0.5 flex flex-col items-center">
-        <span className={clsx("w-2 h-2 rounded-full", dot)} />
-      </div>
-      <div className="flex-1">
-        <div className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-ink-400">
-          Step {String(n).padStart(2, "0")}
-        </div>
-        <div className="text-[13px] text-ink-900 font-medium tracking-tight mt-0.5">
-          {title}
-        </div>
-        <div className="text-[12px] text-ink-500 leading-snug mt-0.5">
-          {body}
-        </div>
-      </div>
-    </li>
+    <span
+      className={clsx(
+        "inline-flex items-center gap-1.5 px-2 py-[3px] rounded-md border font-mono text-[10px] uppercase tracking-[0.14em]",
+        meta.classes,
+        isSuggest && "border-dashed",
+      )}
+      title={`${meta.label} — ${meta.blurb}${isSuggest ? " (awaiting approval)" : ""}`}
+    >
+      <span className="font-medium">{meta.label}</span>
+      {isSuggest && (
+        <span
+          className={clsx(
+            "normal-case tracking-normal text-[9px] px-1 rounded-sm",
+            pending && "bg-white/70 text-ink-700",
+            approved && "bg-sev-low/15 text-sev-low",
+            rejected && "bg-ink-200 text-ink-500 line-through",
+          )}
+        >
+          {approved ? "approved" : rejected ? "rejected" : "needs approval"}
+        </span>
+      )}
+    </span>
   );
 }
+
