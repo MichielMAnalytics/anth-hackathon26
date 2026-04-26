@@ -42,8 +42,9 @@ export async function fetchRegionStats(): Promise<RegionStats[]> {
   return r.json();
 }
 
-export async function fetchDashboard(): Promise<Dashboard> {
-  const r = await fetch("/api/dashboard", { headers: ah() });
+export async function fetchDashboard(minutes?: number): Promise<Dashboard> {
+  const qs = minutes ? `?minutes=${minutes}` : "";
+  const r = await fetch(`/api/dashboard${qs}`, { headers: ah() });
   if (!r.ok) throw new Error("dashboard");
   return r.json();
 }

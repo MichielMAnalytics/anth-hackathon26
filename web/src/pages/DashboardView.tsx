@@ -13,6 +13,14 @@ import type {
 } from "../lib/types";
 import { RegionCard } from "../components/dashboard/RegionCard";
 import { SendModal } from "../components/send/SendModal";
+import { Select } from "../components/Select";
+
+const WINDOW_OPTIONS: { value: string; label: string }[] = [
+  { value: "15", label: "Last 15 min" },
+  { value: "60", label: "Last 60 min" },
+  { value: "360", label: "Last 6 h" },
+  { value: "1440", label: "Last 24 h" },
+];
 
 interface PreparedSend {
   mode: SendMode;
@@ -59,11 +67,12 @@ export function DashboardView() {
 
   const [data, setData] = useState<Dashboard | null>(null);
   const [send, setSend] = useState<PreparedSend | null>(null);
+  const [windowMinutes, setWindowMinutes] = useState<number>(60);
 
   useEffect(() => {
     let cancelled = false;
     const load = () =>
-      fetchDashboard()
+      fetchDashboard(windowMinutes)
         .then((d) => !cancelled && setData(d))
         .catch(() => {});
     load();
@@ -72,7 +81,7 @@ export function DashboardView() {
       cancelled = true;
       clearInterval(id);
     };
-  }, []);
+  }, [windowMinutes]);
 
   const visibleRegions = useMemo(() => {
     if (!data) return [];
@@ -135,14 +144,17 @@ export function DashboardView() {
                 help.
               </p>
             </div>
-            {data && (
-              <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-500 lg:text-right">
-                <div>Window</div>
-                <div className="text-ink-900 normal-case tracking-normal mt-1 text-[13px]">
-                  last {data.windowMinutes} min
-                </div>
-              </div>
-            )}
+            <div className="flex flex-col items-start lg:items-end gap-1.5">
+              <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-500">
+                /// Window
+              </span>
+              <Select<string>
+                value={String(windowMinutes)}
+                onChange={(v) => setWindowMinutes(Number(v))}
+                options={WINDOW_OPTIONS}
+                ariaLabel="Dashboard time window"
+              />
+            </div>
           </header>
 
           {/* Summary banner — flat, no boxes, vertical rules */}

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,9 +15,8 @@ from server.db.session import get_db
 
 router = APIRouter(prefix="/api")
 
-WINDOW_MINUTES = 60
+DEFAULT_WINDOW_MINUTES = 60
 SPARKLINE_SLOTS = 12
-SPARKLINE_SLOT_MINUTES = WINDOW_MINUTES // SPARKLINE_SLOTS  # 5
 BASELINE_MSGS_PER_MIN = 0.5
 
 _GEOHASH_TO_REGION: dict[str, str] = {meta["geohash_prefix"]: key for key, meta in REGIONS.items()}
@@ -42,10 +41,15 @@ def _region_for_prefix(prefix: str | None) -> str:
 @router.get("/dashboard")
 async def dashboard(
     _op: Annotated[dict[str, Any], Depends(current_operator)],
+    minutes: Annotated[int, Query(ge=5, le=1440)] = DEFAULT_WINDOW_MINUTES,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     now = datetime.now(UTC)
-    window_start = now - timedelta(minutes=WINDOW_MINUTES)
+    window_minutes = minutes
+    # Sparkline slot length scales with the requested window so the chart
+    # always covers the full range with the same number of buckets.
+    sparkline_slot_minutes = max(1, window_minutes // SPARKLINE_SLOTS)
+    window_start = now - timedelta(minutes=window_minutes)
 
     alerts = (await db.execute(select(Alert).where(Alert.status == "active"))).scalars().all()
     alert_map: dict[str, Alert] = {a.alert_id: a for a in alerts}
@@ -88,15 +92,15 @@ async def dashboard(
 
         msg_count = len(r_msgs)
         distinct_senders = len({m.sender_phone for m in r_msgs})
-        msgs_per_min = msg_count / WINDOW_MINUTES
+        msgs_per_min = msg_count / window_minutes
         urgency = min(1.0, msgs_per_min / max(1, BASELINE_MSGS_PER_MIN) / 5.0)
         anomaly = msgs_per_min > BASELINE_MSGS_PER_MIN * 2
 
         sparkline = [0.0] * SPARKLINE_SLOTS
         for msg in r_msgs:
             age_minutes = (now - msg.received_at).total_seconds() / 60
-            if 0 <= age_minutes < WINDOW_MINUTES:
-                slot = min(int(age_minutes // SPARKLINE_SLOT_MINUTES), SPARKLINE_SLOTS - 1)
+            if 0 <= age_minutes < window_minutes:
+                slot = min(int(age_minutes // sparkline_slot_minutes), SPARKLINE_SLOTS - 1)
                 sparkline[SPARKLINE_SLOTS - 1 - slot] += 1.0
 
         sorted_alerts = sorted(
@@ -148,7 +152,7 @@ async def dashboard(
             })
 
     return {
-        "windowMinutes": WINDOW_MINUTES,
+        "windowMinutes": window_minutes,
         "regions": regions_out,
         "recentDistress": recent_distress,
     }
