@@ -19,18 +19,20 @@ from server.api.ws import router as ws_router
 from server.db.engine import get_engine, get_session_maker
 from server.eventbus.postgres import PostgresEventBus
 from server.workers.agent import agent_worker_loop
+from server.workers.heartbeat import heartbeat_loop
 from server.workers.triage import triage_worker_loop
 
 logger = logging.getLogger(__name__)
 
 _triage_task: Optional[asyncio.Task] = None
 _agent_task: Optional[asyncio.Task] = None
+_heartbeat_task: Optional[asyncio.Task] = None
 _event_bus: Optional[PostgresEventBus] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _triage_task, _agent_task, _event_bus
+    global _triage_task, _agent_task, _heartbeat_task, _event_bus
     engine = get_engine()
     session_maker = get_session_maker()
     _event_bus = PostgresEventBus(engine)
@@ -42,10 +44,14 @@ async def lifespan(app: FastAPI):
         agent_worker_loop(_event_bus, session_maker),
         name="agent-worker",
     )
+    _heartbeat_task = asyncio.create_task(
+        heartbeat_loop(_event_bus, session_maker),
+        name="heartbeat",
+    )
     try:
         yield
     finally:
-        for t in (_triage_task, _agent_task):
+        for t in (_triage_task, _agent_task, _heartbeat_task):
             if t and not t.done():
                 t.cancel()
                 try:

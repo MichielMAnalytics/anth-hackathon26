@@ -9,11 +9,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.db.base import generate_ulid
-from server.db.engine import get_engine
+from server.db.engine import get_engine, get_session_maker
 from server.db.identity import NGO
 from server.db.messages import InboundMessage
 from server.db.session import get_db
 from server.eventbus.postgres import PostgresEventBus
+from server.sim import replay as replay_mod
 from server.sim.seeder import seed_rich
 
 router = APIRouter(prefix="/api/sim")
@@ -26,6 +27,26 @@ async def seed(
 ) -> dict[str, Any]:
     """Populate the demo scene. Idempotent; pass ?reset=true to rebuild."""
     return await seed_rich(db, reset=reset)
+
+
+@router.post("/replay/start")
+async def replay_start(
+    interval_sec: float = Query(default=6.0, ge=1.0, le=60.0, alias="intervalSec"),
+) -> dict[str, Any]:
+    """Start firing one inbound message every intervalSec seconds."""
+    eventbus = PostgresEventBus(get_engine())
+    sm = get_session_maker()
+    return replay_mod.start_replay(sm, eventbus, interval_sec=interval_sec)
+
+
+@router.post("/replay/stop")
+async def replay_stop() -> dict[str, Any]:
+    return await replay_mod.stop_replay()
+
+
+@router.get("/replay/status")
+async def replay_status() -> dict[str, Any]:
+    return replay_mod.status()
 
 
 class InboundEnvelope(BaseModel):
