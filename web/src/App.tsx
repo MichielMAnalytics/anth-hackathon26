@@ -101,15 +101,35 @@ export function App() {
     <div className="h-full flex flex-col bg-surface-100 text-ink-900">
       <header className="h-14 border-b border-surface-300 bg-white px-4 sm:px-8 flex items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-3 sm:gap-8 min-w-0">
-          <div className="flex items-center shrink-0">
-            <button
-              onClick={() => navigate("dashboard")}
-              className="font-display text-[17px] font-semibold text-ink-900 tracking-tightest leading-none whitespace-nowrap rounded-sm transition hover:opacity-80"
-              aria-label="Go to dashboard"
+          <button
+            onClick={() => navigate("dashboard")}
+            className="flex items-center gap-2.5 shrink-0 rounded-sm transition hover:opacity-80"
+            aria-label="Go to dashboard"
+          >
+            <span
+              aria-hidden
+              className="w-7 h-7 rounded-md bg-ink-900 flex items-center justify-center shrink-0"
             >
-              <span className="text-brand-600">Safe</span>Thread
-            </button>
-          </div>
+              <svg
+                viewBox="0 0 32 32"
+                fill="none"
+                className="w-full h-full"
+              >
+                <path
+                  d="M 8 22 C 8 6 24 6 24 22"
+                  stroke="#ffffff"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+                <circle cx="8" cy="22" r="2.5" fill="#ffffff" />
+                <circle cx="16" cy="10" r="2.5" fill="#ffffff" />
+                <circle cx="24" cy="22" r="2.5" fill="#ffffff" />
+              </svg>
+            </span>
+            <span className="font-sans text-[12px] font-medium uppercase tracking-[0.22em] leading-none whitespace-nowrap text-ink-900">
+              SafeThread
+            </span>
+          </button>
           {/* mobile burger menu */}
           <div ref={navRef} className="md:hidden relative">
             <button
