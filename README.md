@@ -166,7 +166,7 @@ ngrok http 8080
 
 ### Deploying for an NGO (boxd.sh)
 
-We ship to **[boxd.sh](https://boxd.sh)** — a one-command VM platform with a built-in TLS-terminating subdomain proxy. An NGO can be live in under 10 minutes with no infra knowledge.
+We ship to **[boxd.sh](https://boxd.sh)** — a one-command VM platform with a built-in TLS-terminating subdomain proxy. An NGO can be live in under 3 minutes with no infra knowledge.
 
 ```bash
 # 1. From your laptop — provision a VM with a memorable name.
