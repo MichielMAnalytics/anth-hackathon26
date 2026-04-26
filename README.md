@@ -100,6 +100,24 @@ Five **execution nodes**, four **DB-coupled stages**, one **operator-in-the-loop
 
 ## 3. Quick start
 
+### Production-style (one step, demo-ready)
+
+```bash
+# 1. set the Anthropic key (.env is gitignored)
+echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
+
+# 2. up
+docker compose up -d --build
+```
+
+That's it. The image runs alembic migrations, starts the workers, calls
+`seed_rich()` (8 alerts across 6 regions, ~30 historic decisions, 8
+pending suggestions), and starts the live replay drip 3s later. Open
+`http://localhost:8080` (or `https://<vm>.boxd.sh` on a deploy) — the
+dashboard lands populated and breathing.
+
+### Dev (hot-reload backend + Vite)
+
 ```bash
 # 1. bring up Postgres + pgvector
 docker compose up -d db
@@ -122,7 +140,21 @@ cd web && npm install && npm run dev
 # open http://localhost:5173
 ```
 
-`.env.example` documents the required env vars: `DATABASE_URL`, `TEST_DATABASE_URL`, `JWT_SECRET`, `ANTHROPIC_API_KEY` (optional — without it both LLM tiers fall back to deterministic stubs), `HEARTBEAT_INTERVAL_SEC` (default 300, set lower for demo).
+### Env vars
+
+All settable via `.env` or the host shell. Defaults in parentheses are
+what `docker-compose.yml` ships.
+
+| Var | Default | Effect |
+|---|---|---|
+| `DATABASE_URL` | `postgresql+asyncpg://app:app@db:5432/matching` | Postgres URL the app + alembic use |
+| `ANTHROPIC_API_KEY` | — | enables real Haiku triage + Opus 4.7 agent. Without it both fall back to deterministic stubs (demo still runs, just stub-mode + `costUsd=0`). |
+| `JWT_SECRET` | `change-me` | NGO operator JWT signing |
+| `HEARTBEAT_INTERVAL_SEC` | `300` | how often the heartbeat scheduler ticks each active alert. Drop to `60` for a livelier demo. |
+| `HEARTBEAT_ENABLED` | `true` | `false` to skip the heartbeat task entirely |
+| `SEED_ON_BOOT` | `true` (compose) | call `seed_rich()` on app startup if Warchild isn't there yet. Idempotent. |
+| `REPLAY_AUTOSTART` | `true` (compose) | start the live drip a few seconds after boot. |
+| `REPLAY_INTERVAL_SEC` | `4` | drip cadence when autostarted; lower = busier dashboard. |
 
 ---
 
