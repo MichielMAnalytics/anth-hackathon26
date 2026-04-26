@@ -11,6 +11,7 @@ from server.db.decisions import AgentDecision, ToolCall
 from server.db.engine import get_engine, get_session_maker
 from server.db.messages import Bucket, InboundMessage
 from server.eventbus.postgres import PostgresEventBus
+from server.workers.narrate import narrate_call, narrate_decision
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -93,17 +94,28 @@ async def _compose_decision_event(decision_id: str) -> Optional[dict]:
                 select(ToolCall).where(ToolCall.decision_id == d.decision_id)
             )
         ).scalars().all()
+    is_heartbeat = d.bucket_key.startswith("heartbeat:")
+    narration = narrate_decision(
+        [
+            {"tool_name": c.tool_name, "args": c.args, "mode": c.mode}
+            for c in calls
+        ],
+        alert=alert,
+        is_heartbeat=is_heartbeat,
+    )
     return {
         "type": "decision_made",
+        "narration": narration,
         "decision": {
             "id": d.decision_id,
             "model": d.model,
             "summary": d.reasoning_summary,
+            "narration": narration,
             "totalTurns": d.total_turns,
             "latencyMs": d.latency_ms,
             "costUsd": d.cost_usd,
             "createdAt": d.created_at.isoformat() if d.created_at else None,
-            "isHeartbeat": d.bucket_key.startswith("heartbeat:"),
+            "isHeartbeat": is_heartbeat,
             "toolCalls": [
                 {"id": c.call_id, "name": c.tool_name, "mode": c.mode,
                  "approvalStatus": c.approval_status}
@@ -130,13 +142,16 @@ async def _compose_suggestion_pending_event(call_id: str) -> Optional[dict]:
                 alert = await s.get(Alert, bucket.alert_id)
         elif isinstance(tc.args, dict) and tc.args.get("incident_id"):
             alert = await s.get(Alert, tc.args["incident_id"])
+    narration = narrate_call(tc.tool_name, tc.args or {}, tc.mode)
     return {
         "type": "suggestion_pending",
+        "narration": narration,
         "suggestion": {
             "id": tc.call_id,
             "tool": tc.tool_name,
             "mode": tc.mode,
             "args": tc.args,
+            "narration": narration,
             "createdAt": tc.created_at.isoformat() if tc.created_at else None,
             "decisionSummary": decision.reasoning_summary if decision else None,
         },

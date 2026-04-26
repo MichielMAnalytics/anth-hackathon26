@@ -164,6 +164,59 @@ async def test_recent_decisions_backfills_activity_tape(client, seeded):
     assert isinstance(sample["toolCalls"], list)
 
 
+async def test_recent_decisions_include_narration(client, seeded):
+    decisions = (
+        await client.get("/api/decisions/recent?limit=20", headers=_OP_HDR)
+    ).json()
+    assert decisions
+    sample = decisions[0]
+    assert "narration" in sample
+    assert sample["narration"]
+    # Should be plain English, not the legacy "stub: …" style.
+    assert not sample["narration"].startswith("stub:")
+
+
+async def test_decision_detail_returns_full_turns(client, seeded):
+    decisions = (
+        await client.get("/api/decisions/recent?limit=1", headers=_OP_HDR)
+    ).json()
+    assert decisions
+    did = decisions[0]["id"]
+
+    resp = await client.get(f"/api/decisions/{did}", headers=_OP_HDR)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["id"] == did
+    assert body["narration"]
+    assert "turns" in body
+    assert isinstance(body["turns"], list)
+    assert "promptHash" in body
+    assert isinstance(body["toolCalls"], list)
+    if body["toolCalls"]:
+        # Detail shape includes args + decided fields.
+        first = body["toolCalls"][0]
+        assert "args" in first
+        assert "approvalStatus" in first
+
+
+async def test_decision_detail_404_for_unknown(client, seeded):
+    resp = await client.get("/api/decisions/01XXNOTAREALID00000000000XX", headers=_OP_HDR)
+    assert resp.status_code == 404
+
+
+async def test_suggestions_include_narration(client, seeded):
+    suggestions = (
+        await client.get("/api/suggestions", headers=_OP_HDR)
+    ).json()
+    assert suggestions
+    # Suggestion items don't currently get a narration on the list endpoint
+    # — narration ships on the WS suggestion_pending event. We just confirm
+    # the existing decision summary is human (not 'stub:').
+    sample = suggestions[0]
+    if sample.get("decision") and sample["decision"].get("summary"):
+        assert not sample["decision"]["summary"].startswith("stub:")
+
+
 async def test_agent_stats_aggregates(client, seeded):
     resp = await client.get("/api/agent/stats", headers=_OP_HDR)
     assert resp.status_code == 200

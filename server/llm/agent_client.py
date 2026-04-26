@@ -25,6 +25,7 @@ from server.workers.agent_tools import (
     clear_scope,
     set_scope,
 )
+from server.workers.narrate import narrate_decision
 
 logger = logging.getLogger(__name__)
 
@@ -307,7 +308,11 @@ async def stub_decide(ctx: AgentContext, scope: DecisionScope) -> dict:
             await HANDLERS["noop"]({"reason": "no actionable messages in bucket"})
             emitted.append("noop")
 
-        summary = "stub: " + ",".join(emitted)
+        summary = narrate_decision(
+            scope.staged,
+            alert=ctx.alert,
+            is_heartbeat=ctx.is_heartbeat(),
+        )
         return {
             "model": "stub",
             "reasoning_summary": summary,

@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,21 +17,29 @@ from server.db.alerts import Alert
 from server.db.decisions import AgentDecision, ToolCall
 from server.db.messages import Bucket
 from server.db.session import get_db
+from server.workers.narrate import narrate_decision
 
 router = APIRouter(prefix="/api")
 
 
 def _decision_shape(d: AgentDecision, alert: Alert | None, calls: list[ToolCall]) -> dict[str, Any]:
+    is_heartbeat = d.bucket_key.startswith("heartbeat:")
+    narration = narrate_decision(
+        [{"tool_name": c.tool_name, "args": c.args, "mode": c.mode} for c in calls],
+        alert=alert,
+        is_heartbeat=is_heartbeat,
+    )
     return {
         "id": d.decision_id,
         "model": d.model,
         "summary": d.reasoning_summary,
+        "narration": narration,
         "totalTurns": d.total_turns,
         "latencyMs": d.latency_ms,
         "costUsd": d.cost_usd,
         "createdAt": d.created_at.isoformat() if d.created_at else None,
         "bucketKey": d.bucket_key,
-        "isHeartbeat": d.bucket_key.startswith("heartbeat:"),
+        "isHeartbeat": is_heartbeat,
         "alert": (
             {
                 "id": alert.alert_id,
@@ -98,6 +106,51 @@ async def recent_decisions(
         alert = alert_map.get(bucket.alert_id) if bucket else None
         out.append(_decision_shape(d, alert, by_decision.get(d.decision_id, [])))
     return out
+
+
+@router.get("/decisions/{decision_id}")
+async def decision_detail(
+    decision_id: str,
+    _op: Annotated[dict[str, Any], Depends(current_operator)],
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Full AgentDecision row for the reasoning drawer.
+
+    Returns the standard list shape PLUS the full multi-turn `turns JSON`
+    and each ToolCall's args (so the operator can audit what the agent
+    looked at, what it considered, and what it called).
+    """
+    d = await db.get(AgentDecision, decision_id)
+    if d is None:
+        raise HTTPException(status_code=404, detail="decision not found")
+
+    bucket = await db.get(Bucket, d.bucket_key)
+    alert = await db.get(Alert, bucket.alert_id) if bucket else None
+
+    calls = (
+        await db.execute(
+            select(ToolCall).where(ToolCall.decision_id == decision_id)
+        )
+    ).scalars().all()
+
+    base = _decision_shape(d, alert, list(calls))
+    base["turns"] = d.turns or []
+    base["promptHash"] = d.prompt_hash
+    # Replace the lean toolCalls with full args / approval state.
+    base["toolCalls"] = [
+        {
+            "id": c.call_id,
+            "name": c.tool_name,
+            "mode": c.mode,
+            "approvalStatus": c.approval_status,
+            "args": c.args,
+            "decidedBy": c.decided_by,
+            "decidedAt": c.decided_at.isoformat() if c.decided_at else None,
+            "createdAt": c.created_at.isoformat() if c.created_at else None,
+        }
+        for c in calls
+    ]
+    return base
 
 
 @router.get("/agent/stats")
