@@ -14,10 +14,9 @@ Per spec §4.3: subscribe to `bucket_open`, drain the queue. For each event:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 from typing import Any, Optional
-
-import hashlib
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker
@@ -56,6 +55,12 @@ async def _process_bucket(
     sdk_client: Any,
 ) -> None:
     """Run a single agent decision for one claimed bucket."""
+    # Tell the UI the agent has picked up this bucket — region card glows.
+    try:
+        await eventbus.publish("agent_thinking", bucket.bucket_key)
+    except Exception:
+        pass
+
     ctx = await load_context(session_maker, bucket)
     scope = DecisionScope(ctx=ctx, session_maker=session_maker)
 
@@ -64,22 +69,32 @@ async def _process_bucket(
     else:
         decision_meta = await stub_decide(ctx, scope)
 
-    await _persist_decision(scope, decision_meta, session_maker)
+    decision_id, pending_call_ids = await _persist_decision(
+        scope, decision_meta, session_maker
+    )
 
     has_execute = any(s.approval_status == "auto_executed" for s in scope.staged)
-    has_suggest = any(s.approval_status == "pending" for s in scope.staged)
+    has_suggest = bool(pending_call_ids)
     if has_execute:
         await eventbus.publish("toolcalls_pending", bucket.bucket_key)
     if has_suggest:
         await eventbus.publish("suggestions_pending", bucket.bucket_key)
+        for cid in pending_call_ids:
+            await eventbus.publish("suggestion_pending", cid)
+    if decision_id:
+        await eventbus.publish("decision_made", decision_id)
 
 
 async def _persist_decision(
     scope: DecisionScope,
     decision_meta: dict,
     session_maker: async_sessionmaker,
-) -> None:
-    """Write AgentDecision + ToolCall rows; apply execute-mode side-effects."""
+) -> tuple[Optional[str], list[str]]:
+    """Write AgentDecision + ToolCall rows; apply execute-mode side-effects.
+
+    Returns (decision_id_if_persisted, list_of_pending_tool_call_ids).
+    """
+    pending_ids: list[str] = []
     async with session_maker() as session:
         decision = AgentDecision(
             ngo_id=scope.ctx.bucket.ngo_id,
@@ -102,9 +117,8 @@ async def _persist_decision(
         try:
             await session.flush()
         except IntegrityError:
-            # UNIQUE(bucket_key) — replay of this same bucket; bail.
             await session.rollback()
-            return
+            return None, []
 
         for staged in scope.staged:
             tc = ToolCall(
@@ -121,12 +135,14 @@ async def _persist_decision(
             try:
                 await session.flush()
             except IntegrityError:
-                # UNIQUE(idempotency_key) — duplicate from a prior decision.
                 await session.rollback()
                 continue
+            if staged.approval_status == "pending":
+                pending_ids.append(tc.call_id)
             await apply_side_effects(staged, scope.ctx.bucket.ngo_id, session)
 
         await session.commit()
+        return decision.decision_id, pending_ids
 
 
 async def agent_worker_loop(

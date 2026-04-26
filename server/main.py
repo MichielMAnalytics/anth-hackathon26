@@ -5,6 +5,7 @@ from typing import Optional
 
 from fastapi import FastAPI
 
+from server.api.agent_feed import router as agent_feed_router
 from server.api.audiences import router as audiences_router
 from server.api.dashboard import router as dashboard_router
 from server.api.health import router as health_router
@@ -13,6 +14,7 @@ from server.api.operator_actions import router as operator_actions_router
 from server.api.operators import router as operators_router
 from server.api.regions import router as regions_router
 from server.api.sim import router as sim_router
+from server.api.suggestions import router as suggestions_router
 from server.api.ws import router as ws_router
 from server.db.engine import get_engine, get_session_maker
 from server.eventbus.postgres import PostgresEventBus
@@ -61,6 +63,8 @@ app.include_router(audiences_router)
 app.include_router(regions_router)
 app.include_router(incidents_router)
 app.include_router(operator_actions_router)
+app.include_router(suggestions_router)
+app.include_router(agent_feed_router)
 app.include_router(dashboard_router)
 app.include_router(sim_router)
 app.include_router(ws_router)
